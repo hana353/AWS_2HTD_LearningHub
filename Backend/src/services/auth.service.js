@@ -1,12 +1,13 @@
 // src/services/auth.service.js
-// Business logic cho auth, dùng AWS Cognito + SQL Server
 
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+
 import {
   findUserByEmail,
   createUserWithProfile,
-  findUserByIdWithProfile
+  findUserByIdWithProfile,
+  updateEmailVerified 
 } from '../models/user.model.js';
 
 import {
@@ -16,12 +17,14 @@ import {
 
 import {
   SignUpCommand,
-  InitiateAuthCommand
+  InitiateAuthCommand,
+  ConfirmSignUpCommand,        
+  ResendConfirmationCodeCommand 
 } from '@aws-sdk/client-cognito-identity-provider';
 
 dotenv.config();
 
-// Đăng ký: Cognito SignUp + lưu DB
+// Đăng ký
 export async function register({ email, password, fullName, phone }) {
   const existing = await findUserByEmail(email);
 
@@ -33,13 +36,11 @@ export async function register({ email, password, fullName, phone }) {
 
   let userSub;
   try {
-    // Username không được ở dạng email (pool dùng email alias)
     const username = email.split('@')[0] + '_' + Date.now();
-
     const userAttributes = [
       { Name: 'email', Value: email },
-      { Name: 'phone_number', Value: phone },
-      { Name: 'family_name', Value: fullName }
+      ...(phone ? [{ Name: 'phone_number', Value: phone }] : []),
+      ...(fullName ? [{ Name: 'family_name', Value: fullName }] : [])
     ];
 
     const signUpCommand = new SignUpCommand({
@@ -50,7 +51,7 @@ export async function register({ email, password, fullName, phone }) {
     });
 
     const response = await cognitoClient.send(signUpCommand);
-    userSub = response.UserSub;
+    userSub = response.UserSub; 
   } catch (err) {
     console.error('Cognito SignUp error:', err);
 
@@ -63,7 +64,6 @@ export async function register({ email, password, fullName, phone }) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-
   const newUser = await createUserWithProfile({
     email,
     passwordHash,
@@ -81,20 +81,20 @@ export async function register({ email, password, fullName, phone }) {
     },
     cognito: {
       userSub,
-      userConfirmed: false // tuỳ cách bạn confirm email trong pool
+      userConfirmed: false 
     }
   };
 }
 
-// Đăng nhập: xác thực Cognito, trả về token Cognito + user DB
+// Đăng nhập
 export async function login({ email, password }) {
   let authResult;
   try {
     const command = new InitiateAuthCommand({
-      AuthFlow: 'USER_PASSWORD_AUTH',
+      AuthFlow: 'USER_PASSWORD_AUTH', 
       ClientId: COGNITO_CLIENT_ID,
       AuthParameters: {
-        USERNAME: email,      // dùng email để login (alias)
+        USERNAME: email, 
         PASSWORD: password
       }
     });
@@ -113,16 +113,44 @@ export async function login({ email, password }) {
     if (err.name === 'UserNotConfirmedException') {
       const e = new Error('User not confirmed (please verify email)');
       e.statusCode = 403;
+      e.code = 'EMAIL_NOT_VERIFIED';
       throw e;
     }
 
-    const e = new Error(`${err.name || 'CognitoError'}: ${err.message || 'Cannot login with Cognito'}`);
+    if (err.name === 'InvalidParameterException') {
+      const e = new Error(
+        `${err.name}: ${err.message || 'USER_PASSWORD_AUTH flow not enabled for this client'}`
+      );
+      e.statusCode = 500;
+      e.errors = err;
+      throw e;
+    }
+
+    const e = new Error(
+      `${err.name || 'CognitoError'}: ${err.message || 'Cannot login with Cognito'}`
+    );
     e.statusCode = 500;
     e.errors = err;
     throw e;
   }
 
-  // Tìm user trong DB để lấy role, profile
+  if (!authResult || !authResult.IdToken) {
+    const e = new Error('Không nhận được token từ Cognito');
+    e.statusCode = 500;
+    throw e;
+  }
+
+  let emailVerified = false;
+  try {
+    const [, payload] = authResult.IdToken.split('.');
+    const decoded = JSON.parse(
+      Buffer.from(payload, 'base64').toString('utf8')
+    );
+    emailVerified = !!decoded.email_verified;
+  } catch (err) {
+    console.error('Decode IdToken error:', err);
+  }
+
   let user = await findUserByEmail(email);
 
   if (!user) {
@@ -137,12 +165,21 @@ export async function login({ email, password }) {
     throw e;
   }
 
+  if (emailVerified && !user.email_verified) {
+    try {
+      user = await updateEmailVerified(user.id, true);
+    } catch (err) {
+      console.error('Update email_verified in DB error:', err);
+    }
+  }
+
   return {
     user: {
       id: user.id,
       email: user.email,
       role_id: user.role_id,
-      is_active: user.is_active
+      is_active: user.is_active,
+      email_verified: user.email_verified
     },
     cognitoTokens: {
       idToken: authResult.IdToken,
@@ -154,7 +191,70 @@ export async function login({ email, password }) {
   };
 }
 
-// Lấy info user từ DB (sau khi đã auth bằng Cognito JWT)
+// Xác thực email bằng mã code Cognito gửi về mail
+export async function confirmEmail({ email, code }) {
+  try {
+    const command = new ConfirmSignUpCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      Username: email,    
+      ConfirmationCode: code
+    });
+
+    await cognitoClient.send(command);
+  } catch (err) {
+    console.error('Cognito confirm email error:', err);
+
+    if (err.name === 'CodeMismatchException') {
+      const e = new Error('Mã xác thực không đúng');
+      e.statusCode = 400;
+      throw e;
+    }
+
+    if (err.name === 'ExpiredCodeException') {
+      const e = new Error('Mã xác thực đã hết hạn');
+      e.statusCode = 400;
+      throw e;
+    }
+
+    const e = new Error(
+      `${err.name || 'CognitoError'}: ${err.message || 'Cannot confirm email'}`
+    );
+    e.statusCode = 500;
+    e.errors = err;
+    throw e;
+  }
+
+  const user = await findUserByEmail(email);
+  if (user && !user.email_verified) {
+    await updateEmailVerified(user.id, true);
+  }
+
+  return true;
+}
+
+// Gửi lại mã xác thực email
+export async function resendConfirmCode({ email }) {
+  try {
+    const command = new ResendConfirmationCodeCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      Username: email
+    });
+
+    await cognitoClient.send(command);
+    return true;
+  } catch (err) {
+    console.error('Cognito resend confirm code error:', err);
+
+    const e = new Error(
+      `${err.name || 'CognitoError'}: ${err.message || 'Cannot resend confirm code'}`
+    );
+    e.statusCode = 500;
+    e.errors = err;
+    throw e;
+  }
+}
+
+// Lấy info user từ DB (sau khi đã auth bằng Cognito JWT ở middleware)
 export async function getCurrentUser(userId) {
   const user = await findUserByIdWithProfile(userId);
 

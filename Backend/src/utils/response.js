@@ -1,5 +1,4 @@
 // src/utils/response.js
-// Chuẩn hoá format response JSON
 
 export function successResponse(res, data = null, message = 'Success', statusCode = 200) {
   return res.status(statusCode).json({
