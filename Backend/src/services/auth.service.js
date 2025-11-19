@@ -1,5 +1,4 @@
 // src/services/auth.service.js
-
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
 
@@ -7,7 +6,7 @@ import {
   findUserByEmail,
   createUserWithProfile,
   findUserByIdWithProfile,
-  updateEmailVerified 
+  updateEmailVerified
 } from '../models/user.model.js';
 
 import {
@@ -18,13 +17,13 @@ import {
 import {
   SignUpCommand,
   InitiateAuthCommand,
-  ConfirmSignUpCommand,        
-  ResendConfirmationCodeCommand 
+  ConfirmSignUpCommand,
+  ResendConfirmationCodeCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 
 dotenv.config();
 
-// Đăng ký
+//Đăng ký
 export async function register({ email, password, fullName, phone }) {
   const existing = await findUserByEmail(email);
 
@@ -36,7 +35,6 @@ export async function register({ email, password, fullName, phone }) {
 
   let userSub;
   try {
-    const username = email.split('@')[0] + '_' + Date.now();
     const userAttributes = [
       { Name: 'email', Value: email },
       ...(phone ? [{ Name: 'phone_number', Value: phone }] : []),
@@ -45,13 +43,13 @@ export async function register({ email, password, fullName, phone }) {
 
     const signUpCommand = new SignUpCommand({
       ClientId: COGNITO_CLIENT_ID,
-      Username: username,
+      Username: email,        
       Password: password,
       UserAttributes: userAttributes
     });
 
     const response = await cognitoClient.send(signUpCommand);
-    userSub = response.UserSub; 
+    userSub = response.UserSub;
   } catch (err) {
     console.error('Cognito SignUp error:', err);
 
@@ -81,7 +79,7 @@ export async function register({ email, password, fullName, phone }) {
     },
     cognito: {
       userSub,
-      userConfirmed: false 
+      userConfirmed: false
     }
   };
 }
@@ -91,7 +89,7 @@ export async function login({ email, password }) {
   let authResult;
   try {
     const command = new InitiateAuthCommand({
-      AuthFlow: 'USER_PASSWORD_AUTH', 
+      AuthFlow: 'USER_PASSWORD_AUTH',
       ClientId: COGNITO_CLIENT_ID,
       AuthParameters: {
         USERNAME: email, 
@@ -140,6 +138,7 @@ export async function login({ email, password }) {
     throw e;
   }
 
+  // Decode IdToken để lấy email_verified
   let emailVerified = false;
   try {
     const [, payload] = authResult.IdToken.split('.');
@@ -151,6 +150,7 @@ export async function login({ email, password }) {
     console.error('Decode IdToken error:', err);
   }
 
+  // Lấy user trong DB
   let user = await findUserByEmail(email);
 
   if (!user) {
@@ -196,7 +196,7 @@ export async function confirmEmail({ email, code }) {
   try {
     const command = new ConfirmSignUpCommand({
       ClientId: COGNITO_CLIENT_ID,
-      Username: email,    
+      Username: email,
       ConfirmationCode: code
     });
 
@@ -224,6 +224,7 @@ export async function confirmEmail({ email, code }) {
     throw e;
   }
 
+  // Sau khi confirm thành công, sync email_verified trong DB
   const user = await findUserByEmail(email);
   if (user && !user.email_verified) {
     await updateEmailVerified(user.id, true);
@@ -232,7 +233,7 @@ export async function confirmEmail({ email, code }) {
   return true;
 }
 
-// Gửi lại mã xác thực email
+//Gửi lại mã xác thực email
 export async function resendConfirmCode({ email }) {
   try {
     const command = new ResendConfirmationCodeCommand({
