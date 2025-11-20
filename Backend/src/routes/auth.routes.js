@@ -6,7 +6,9 @@ import { register,
     me, 
     debugToken, 
     confirmEmail, 
-    resendConfirmCode 
+    resendConfirmCode,
+    forgotPassword,      
+    resetPassword 
 } from '../controllers/auth.controller.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 
@@ -19,6 +21,10 @@ router.post('/login', login);
 router.post('/confirm-email', confirmEmail);
 
 router.post('/resend-confirm-code', resendConfirmCode);
+
+router.post('/forgot-password', forgotPassword);
+
+router.post('/reset-password', resetPassword);
 
 router.get('/me', authMiddleware, me);
 

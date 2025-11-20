@@ -118,3 +118,47 @@ export async function debugToken(req, res, next) {
     return next(err);
   }
 }
+
+// Gửi mã quên mật khẩu
+export async function forgotPassword(req, res, next) {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return errorResponse(res, 'email là bắt buộc', 400, ['email is required']);
+    }
+
+    await authService.forgotPassword({ email });
+    return successResponse(res, null, 'Forgot password code sent successfully', 200);
+  } catch (err) {
+    if (err.statusCode) {
+      return errorResponse(res, err.message, err.statusCode, err.errors || null);
+    }
+    return next(err);
+  }
+}
+
+// Xác nhận quên mật khẩu (code + mật khẩu mới)
+export async function resetPassword(req, res, next) {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    const errors = [];
+    if (!email) errors.push('email is required');
+    if (!code) errors.push('code is required');
+    if (!newPassword) errors.push('newPassword is required');
+
+    if (errors.length > 0) {
+      return errorResponse(res, 'Validation error', 400, errors);
+    }
+
+    await authService.resetPassword({ email, code, newPassword });
+    return successResponse(res, null, 'Password reset successfully', 200);
+  } catch (err) {
+    if (err.statusCode) {
+      return errorResponse(res, err.message, err.statusCode, err.errors || null);
+    }
+    return next(err);
+  }
+}
+

@@ -6,7 +6,8 @@ import {
   findUserByEmail,
   createUserWithProfile,
   findUserByIdWithProfile,
-  updateEmailVerified
+  updateEmailVerified,
+  updateUserPasswordHash  
 } from '../models/user.model.js';
 
 import {
@@ -18,7 +19,9 @@ import {
   SignUpCommand,
   InitiateAuthCommand,
   ConfirmSignUpCommand,
-  ResendConfirmationCodeCommand
+  ResendConfirmationCodeCommand,
+  ForgotPasswordCommand,          
+  ConfirmForgotPasswordCommand
 } from '@aws-sdk/client-cognito-identity-provider';
 
 dotenv.config();
@@ -275,3 +278,75 @@ export async function getCurrentUser(userId) {
     bio: user.bio
   };
 }
+
+// Gửi mã quên mật khẩu (Cognito gửi code về email)
+export async function forgotPassword({ email }) {
+  try {
+    const command = new ForgotPasswordCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      Username: email
+    });
+
+    await cognitoClient.send(command);
+    return true;
+  } catch (err) {
+    console.error('Cognito forgot password error:', err);
+
+    if (err.name === 'UserNotFoundException') {
+      const e = new Error('User not found');
+      e.statusCode = 404;
+      throw e;
+    }
+
+    const e = new Error(
+      `${err.name || 'CognitoError'}: ${err.message || 'Cannot send forgot password code'}`
+    );
+    e.statusCode = 500;
+    e.errors = err;
+    throw e;
+  }
+}
+
+// Xác nhận quên mật khẩu: nhập code + mật khẩu mới
+export async function resetPassword({ email, code, newPassword }) {
+  try {
+    const command = new ConfirmForgotPasswordCommand({
+      ClientId: COGNITO_CLIENT_ID,
+      Username: email,
+      ConfirmationCode: code,
+      Password: newPassword
+    });
+
+    await cognitoClient.send(command);
+  } catch (err) {
+    console.error('Cognito reset password error:', err);
+
+    if (err.name === 'CodeMismatchException') {
+      const e = new Error('Mã xác thực không đúng');
+      e.statusCode = 400;
+      throw e;
+    }
+
+    if (err.name === 'ExpiredCodeException') {
+      const e = new Error('Mã xác thực đã hết hạn');
+      e.statusCode = 400;
+      throw e;
+    }
+
+    const e = new Error(
+      `${err.name || 'CognitoError'}: ${err.message || 'Cannot reset password'}`
+    );
+    e.statusCode = 500;
+    e.errors = err;
+    throw e;
+  }
+
+  const user = await findUserByEmail(email);
+  if (user) {
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await updateUserPasswordHash(user.id, passwordHash);
+  }
+
+  return true;
+}
+

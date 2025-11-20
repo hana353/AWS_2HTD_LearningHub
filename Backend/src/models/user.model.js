@@ -120,3 +120,28 @@ export async function updateEmailVerified(userId, isVerified) {
 
   return result.recordset[0] || null;
 }
+
+// Cập nhật password_hash cho user (sau khi reset mật khẩu)
+export async function updateUserPasswordHash(userId, passwordHash) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('id', sql.UniqueIdentifier, userId);
+  request.input('password_hash', sql.NVarChar(sql.MAX), passwordHash);
+
+  const result = await request.query(`
+    UPDATE users
+    SET 
+      password_hash = @password_hash,
+      updated_at = SYSDATETIMEOFFSET()
+    OUTPUT 
+      inserted.id,
+      inserted.email,
+      inserted.role_id,
+      inserted.is_active,
+      inserted.email_verified
+    WHERE id = @id;
+  `);
+
+  return result.recordset[0] || null;
+}
+
