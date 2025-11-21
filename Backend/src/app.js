@@ -6,6 +6,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import authRoutes from './routes/auth.routes.js';
+import testRoutes from './routes/test.routes.js';
 import { errorHandler } from './middlewares/error.middleware.js';
 
 dotenv.config();
@@ -23,6 +24,9 @@ app.get('/api/health', (req, res) => {
 
 // Auth routes
 app.use('/api/auth', authRoutes);
+
+// Test / Exam routes
+app.use('/api/tests', testRoutes);
 
 // Error handler (để cuối cùng)
 app.use(errorHandler);

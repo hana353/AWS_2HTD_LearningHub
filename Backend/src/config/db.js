@@ -17,8 +17,8 @@ const dbConfig = {
     idleTimeoutMillis: 30000
   },
   options: {
-    encrypt: true,               // Khớp với "Encryption: Mandatory" trong SSMS
-    trustServerCertificate: true // Khớp với "Trust server certificate"
+    encrypt: true,               
+    trustServerCertificate: true 
   }
 };
 
