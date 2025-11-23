@@ -3,7 +3,13 @@
 import { successResponse, errorResponse } from '../utils/response.js';
 import { createQuestionSchema } from '../validators/question.validator.js';
 import { createExamSchema } from '../validators/exam.validator.js';
+import { submitExamSchema } from '../validators/submission.validator.js';
+
 import * as testService from '../services/test.service.js';
+
+// ============================
+// GIÁO VIÊN
+// ============================
 
 // POST /api/tests/questions
 export async function createQuestion(req, res, next) {
@@ -17,8 +23,11 @@ export async function createQuestion(req, res, next) {
       return errorResponse(res, 'Validation error', 400, details);
     }
 
-    const teacherId = req.user.localUserId; // từ auth.middleware
-    const question = await testService.createTeacherQuestion(teacherId, value);
+    const teacherId = req.user.localUserId;
+    const question = await testService.createTeacherQuestion(
+      teacherId,
+      value
+    );
 
     return successResponse(res, question, 'Question created', 201);
   } catch (err) {
@@ -70,7 +79,7 @@ export async function createExam(req, res, next) {
   }
 }
 
-// GET /api/tests/exams/:id
+// GET /api/tests/exams/:id (cho GV xem chi tiết)
 export async function getExamDetail(req, res, next) {
   try {
     const { id } = req.params;
@@ -81,6 +90,54 @@ export async function getExamDetail(req, res, next) {
     }
 
     return successResponse(res, exam);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// ============================
+// HỌC SINH
+// ============================
+
+// POST /api/tests/exams/:id/start
+export async function startExamForStudent(req, res, next) {
+  try {
+    const examId = req.params.id;
+    const studentId = req.user.localUserId;
+
+    const data = await testService.startStudentExam(studentId, examId);
+    if (!data) {
+      return errorResponse(res, 'Exam not found', 404);
+    }
+
+    return successResponse(res, data, 'Exam started');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// POST /api/tests/submissions/:id/submit
+export async function submitExam(req, res, next) {
+  try {
+    const { error, value } = submitExamSchema.validate(req.body, {
+      abortEarly: false
+    });
+
+    if (error) {
+      const details = error.details.map((d) => d.message);
+      return errorResponse(res, 'Validation error', 400, details);
+    }
+
+    const submissionId = req.params.id;
+    const studentId = req.user.localUserId;
+
+    const result = await testService.submitStudentExam(
+      studentId,
+      submissionId,
+      value
+    );
+
+    return successResponse(res, result, 'Exam submitted');
   } catch (err) {
     return next(err);
   }
