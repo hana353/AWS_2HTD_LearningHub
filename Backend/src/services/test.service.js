@@ -168,7 +168,6 @@ export async function startStudentExam(studentId, examId) {
 
 
 // ========== Logic chấm điểm từng câu ==========
-
 function gradeSingleQuestion(question, answerPayload, questionPoints) {
   const type = question.type;
   const choices = question.choices || [];
