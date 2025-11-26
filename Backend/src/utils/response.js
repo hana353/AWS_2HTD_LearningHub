@@ -1,3 +1,4 @@
+// src/utils/response.js
 
 export function successResponse(res, data = null, message = 'Success', statusCode = 200) {
   return res.status(statusCode).json({

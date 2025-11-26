@@ -1,4 +1,5 @@
-// Bắt mọi lỗi ném ra từ controller/service và trả JSON đẹp
+// src/middlewares/error.middleware.js
+// Middleware bắt lỗi chung cho toàn app
 
 import { errorResponse } from '../utils/response.js';
 

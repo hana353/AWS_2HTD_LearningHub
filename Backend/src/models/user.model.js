@@ -92,6 +92,56 @@ export async function findUserByIdWithProfile(userId) {
     LEFT JOIN user_profiles up ON up.user_id = u.id
     WHERE u.id = @id
   `);
+  
+  return result.recordset[0] || null;
+}
+
+// Cập nhật trạng thái email_verified của user
+// Dùng để đồng bộ cờ email_verified trong DB với trạng thái verify trên Cognito
+export async function updateEmailVerified(userId, isVerified) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('id', sql.UniqueIdentifier, userId);
+  request.input('email_verified', sql.Bit, isVerified ? 1 : 0);
+
+  const result = await request.query(`
+    UPDATE users
+    SET 
+      email_verified = @email_verified,
+      updated_at = SYSDATETIMEOFFSET()
+    OUTPUT 
+      inserted.id,
+      inserted.email,
+      inserted.role_id,
+      inserted.is_active,
+      inserted.email_verified
+    WHERE id = @id;
+  `);
 
   return result.recordset[0] || null;
 }
+
+// Cập nhật password_hash cho user (sau khi reset mật khẩu)
+export async function updateUserPasswordHash(userId, passwordHash) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('id', sql.UniqueIdentifier, userId);
+  request.input('password_hash', sql.NVarChar(sql.MAX), passwordHash);
+
+  const result = await request.query(`
+    UPDATE users
+    SET 
+      password_hash = @password_hash,
+      updated_at = SYSDATETIMEOFFSET()
+    OUTPUT 
+      inserted.id,
+      inserted.email,
+      inserted.role_id,
+      inserted.is_active,
+      inserted.email_verified
+    WHERE id = @id;
+  `);
+
+  return result.recordset[0] || null;
+}
+

@@ -1,3 +1,5 @@
+// src/config/db.js
+// Cấu hình kết nối SQL Server bằng mssql
 
 import sql from 'mssql';
 import dotenv from 'dotenv';
@@ -7,7 +9,8 @@ dotenv.config();
 const dbConfig = {
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER, 
+  server: process.env.DB_SERVER,
+  port: 1433,  
   database: process.env.DB_NAME || '2HTD_LearningHub',
   pool: {
     max: 10,
@@ -34,6 +37,7 @@ const poolConnect = pool
 
 export { sql, pool, poolConnect };
 
+// Helper tạo request mới
 export async function getRequest() {
   await poolConnect;
   return pool.request();

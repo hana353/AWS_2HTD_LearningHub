@@ -1,3 +1,5 @@
+// src/config/cognito.js
+// Cấu hình AWS Cognito client
 
 import dotenv from 'dotenv';
 import { CognitoIdentityProviderClient } from '@aws-sdk/client-cognito-identity-provider';

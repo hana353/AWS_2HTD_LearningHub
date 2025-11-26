@@ -1,27 +1,34 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
+// src/app.js
+// Khởi tạo Express app, mount middlewares + routes
 
-import authRoutes from './routes/auth.routes.js';
-import { errorHandler } from './middlewares/error.middleware.js';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+
+import authRoutes from "./routes/auth.routes.js";
+import testRoutes from "./routes/test.routes.js";
+import { errorHandler } from "./middlewares/error.middleware.js";
 
 dotenv.config();
 
 const app = express();
 
-// middlewares
+// Middlewares chung
 app.use(cors());
 app.use(express.json());
 
-// health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: '2HTD LearningHub Backend' });
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", service: "2HTD LearningHub Backend" });
 });
 
-// routes
-app.use('/api/auth', authRoutes);
+// Auth routes
+app.use("/api/auth", authRoutes);
 
-// error handler
+// Test / Exam routes
+app.use("/api/tests", testRoutes);
+
+// Error handler (để cuối cùng)
 app.use(errorHandler);
 
 export default app;
