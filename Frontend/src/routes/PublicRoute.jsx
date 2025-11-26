@@ -8,7 +8,7 @@ import Layout from "../components/layout/Layout";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
-
+import { MemberDashboardLayout } from "../components/layout/DashboardLayout"; // Layout mới (Sidebar/Header Dashboard)
 // Pages - Protected (Placeholder - đảm bảo bạn đã tạo các file này hoặc comment lại nếu chưa có)
 import AdminDashboard from "../pages/Admin/AdminDashboard";
 import MemberDashboard from "../pages/Member/MemberDashboard";
@@ -28,7 +28,6 @@ const routes = createBrowserRouter([
     ),
     children: [
       { index: true, element: <HomePage /> },
-      // Bắt các đường dẫn sai ở root về trang chủ
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
@@ -52,13 +51,19 @@ const routes = createBrowserRouter([
     path: "/member",
     element: (
       <PrivateRoute allowedRoles={["member"]}>
-        <Layout>
-          <Outlet />
-        </Layout>
+        {/* Layout có Sidebar và Header mới */}
+        <MemberDashboardLayout /> 
       </PrivateRoute>
     ),
     children: [
       { index: true, element: <MemberDashboard /> },
+      
+      // *** CÁC PATH CON TƯƠNG ỨNG VỚI SIDEBAR MENU ***
+      { path: "courses", element: <div>Trang Khóa học của tôi (Nội dung thực tế)</div> }, 
+      { path: "test", element: <div>Trang Bài kiểm tra (Nội dung thực tế)</div> }, 
+      { path: "notifications", element: <div>Trang Thông báo (Nội dung thực tế)</div> }, 
+      { path: "settings", element: <div>Trang Cài đặt (Nội dung thực tế)</div> }, 
+      
       { path: "*", element: <Navigate to="/member" replace /> },
     ],
   },

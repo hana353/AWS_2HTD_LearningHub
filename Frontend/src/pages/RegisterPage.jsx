@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 
-// --- Icons Components (Giữ nguyên) ---
+// --- Icons Components ---
 const EyeIcon = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
 );
@@ -18,13 +19,14 @@ const ArrowLeftIcon = (props) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
 );
 
-// --- Styles Constants ---
+// --- Styles ---
 const primaryText = 'text-[#5a4d8c]';
 const primaryBg = 'bg-[#8c78ec]';
 const hoverBg = 'hover:bg-[#7a66d3]';
 const lightestBg = 'bg-[#f8f6fb]';
 
 export default function RegisterPage() {
+
     const [formData, setFormData] = useState({
         fullName: '',
         phone: '',
@@ -32,7 +34,8 @@ export default function RegisterPage() {
         password: '',
         confirmPassword: '',
         birthDate: '',
-        occupation: 'student'
+        occupation: 'student',
+        role: 'member'
     });
 
     const [showPassword, setShowPassword] = useState(false);
@@ -51,36 +54,39 @@ export default function RegisterPage() {
             return;
         }
 
-        console.log('Đăng ký với dữ liệu:', formData);
-        alert('Đăng ký thành công (Mô phỏng)!');
+        console.log("Dữ liệu gửi đăng ký:", formData);
+
+        alert(
+            `Đăng ký thành công dưới dạng: ${
+                formData.role === "teacher" ? "Giảng viên" : "Học viên"
+            }`
+        );
     };
 
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 ${lightestBg}`}>
 
-            {/* Nút Quay Lại Trang Chủ - Đặt ở đây để nó nằm ngoài khung trắng */}
             <Link
-                to="/" // Đường dẫn trang chủ
+                to="/"
                 className={`fixed top-4 left-4 md:top-8 md:left-8 p-3 rounded-full ${primaryText} bg-white/70 backdrop-blur-sm hover:bg-white transition shadow-lg z-10`}
-                aria-label="Quay lại Trang chủ"
             >
                 <ArrowLeftIcon className="w-6 h-6" />
             </Link>
 
-            {/* Khung đăng ký chính */}
             <div className="w-full max-w-4xl grid md:grid-cols-2 bg-white rounded-3xl shadow-2xl overflow-hidden">
 
-                {/* --- FORM SECTION --- */}
-                {/* Đã bỏ pt-16/pt-12 vì nút back đã nằm ngoài */}
+                {/* FORM SECTION */}
                 <div className="p-8 md:p-12 flex flex-col justify-center order-2 md:order-1">
                     <div className="mb-6 text-center md:text-left">
                         <h1 className={`text-3xl font-extrabold ${primaryText}`}>Đăng ký tài khoản</h1>
-                        <p className="text-gray-500 text-sm mt-2">Nhập thông tin của bạn để tham gia LearningHub.</p>
+                        <p className="text-gray-500 text-sm mt-2">
+                            Nhập thông tin của bạn để tham gia LearningHub.
+                        </p>
                     </div>
 
                     <form onSubmit={handleRegister} className="space-y-4">
 
-                        {/* Row 1: Họ tên & SĐT */}
+                        {/* Row 1 */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Họ và Tên</label>
@@ -90,10 +96,11 @@ export default function RegisterPage() {
                                     required
                                     value={formData.fullName}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                     placeholder="Nguyễn Văn A"
                                 />
                             </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
                                 <input
@@ -102,13 +109,13 @@ export default function RegisterPage() {
                                     required
                                     value={formData.phone}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                     placeholder="09xx xxx xxx"
                                 />
                             </div>
                         </div>
 
-                        {/* Row 2: Email */}
+                        {/* Row 2 */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                             <input
@@ -117,12 +124,12 @@ export default function RegisterPage() {
                                 required
                                 value={formData.email}
                                 onChange={handleChange}
-                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition"
+                                className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                 placeholder="name@example.com"
                             />
                         </div>
 
-                        {/* Row 3: Ngày sinh & Nghề nghiệp */}
+                        {/* Row 3 */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label>
@@ -132,7 +139,7 @@ export default function RegisterPage() {
                                     required
                                     value={formData.birthDate}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                 />
                             </div>
                             <div>
@@ -141,7 +148,7 @@ export default function RegisterPage() {
                                     name="occupation"
                                     value={formData.occupation}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition appearance-none"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                 >
                                     <option value="student">Học sinh</option>
                                     <option value="college_student">Sinh viên</option>
@@ -152,7 +159,40 @@ export default function RegisterPage() {
                             </div>
                         </div>
 
-                        {/* Row 4: Mật khẩu */}
+                        {/* Row: ROLE CHỌN LOẠI TÀI KHOẢN */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Đăng ký dưới dạng
+                            </label>
+
+                            <div className="flex items-center gap-6 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="role"
+                                        value="member"
+                                        checked={formData.role === "member"}
+                                        onChange={handleChange}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                    <span>Học viên</span>
+                                </label>
+
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="radio"
+                                        name="role"
+                                        value="teacher"
+                                        checked={formData.role === "teacher"}
+                                        onChange={handleChange}
+                                        className="w-4 h-4 text-purple-600"
+                                    />
+                                    <span>Giảng viên</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {/* Row 4 - Password */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
@@ -163,18 +203,19 @@ export default function RegisterPage() {
                                         required
                                         value={formData.password}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                         placeholder="••••••••"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowPassword(!showPassword)}
-                                        className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-purple-600"
+                                        className="absolute inset-y-0 right-0 px-3 text-gray-400"
                                     >
                                         {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                     </button>
                                 </div>
                             </div>
+
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nhập lại mật khẩu</label>
                                 <div className="relative">
@@ -184,13 +225,13 @@ export default function RegisterPage() {
                                         required
                                         value={formData.confirmPassword}
                                         onChange={handleChange}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent outline-none bg-gray-50 focus:bg-white transition"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                         placeholder="••••••••"
                                     />
                                     <button
                                         type="button"
                                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                        className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-400 hover:text-purple-600"
+                                        className="absolute inset-y-0 right-0 px-3 text-gray-400"
                                     >
                                         {showConfirmPassword ? <EyeOffIcon /> : <EyeIcon />}
                                     </button>
@@ -198,17 +239,17 @@ export default function RegisterPage() {
                             </div>
                         </div>
 
-                        {/* Terms Checkbox */}
+                        {/* Terms */}
                         <div className="flex items-center text-sm pt-2">
-                            <input type="checkbox" id="terms" className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500" required />
+                            <input type="checkbox" id="terms" className="w-4 h-4 text-purple-600" required />
                             <label htmlFor="terms" className="ml-2 text-gray-600">
-                                Tôi đồng ý với <a href="#" className={`${primaryText} font-semibold hover:underline`}>Điều khoản sử dụng</a>
+                                Tôi đồng ý với <a href="#" className={`${primaryText} font-semibold`}>Điều khoản sử dụng</a>
                             </label>
                         </div>
 
                         <button
                             type="submit"
-                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg ${primaryBg} ${hoverBg} transition transform hover:-translate-y-0.5 mt-2`}
+                            className={`w-full py-3.5 rounded-xl font-bold text-white shadow-lg ${primaryBg} ${hoverBg} mt-2`}
                         >
                             Đăng Ký Ngay
                         </button>
@@ -220,20 +261,20 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="flex justify-center gap-4">
-                        <button className="p-3 bg-white border border-gray-200 rounded-full hover:bg-gray-50 transition shadow-sm hover:shadow-md" aria-label="Sign up with Google">
+                        <button className="p-3 bg-white border border-gray-200 rounded-full hover:bg-gray-50">
                             <GoogleIcon />
                         </button>
                     </div>
 
                     <p className="text-center text-sm text-gray-500 mt-6">
                         Đã có tài khoản?
-                        <Link to="/auth/login" className={`font-semibold ${primaryText} hover:underline ml-1`}>
+                        <Link to="/auth/login" className={`font-semibold ${primaryText} ml-1`}>
                             Đăng nhập tại đây
                         </Link>
                     </p>
                 </div>
 
-                {/* --- BANNER SECTION --- */}
+                {/* RIGHT BANNER */}
                 <div className="hidden md:flex flex-col items-center justify-center p-12 bg-gradient-to-br from-[#8c78ec] to-[#5a4d8c] text-white order-1 md:order-2">
                     <BookIllustration />
                     <h2 className="text-3xl font-bold text-center mt-8">Chào mừng bạn mới!</h2>
