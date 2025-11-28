@@ -1,45 +1,64 @@
-// src/routes/test.routes.js
+// src/routes/auth.routes.js
 
 import express from "express";
-import { authMiddleware } from "../middlewares/auth.middleware.js";
-import { requireRole } from "../middlewares/role.middleware.js";
 import {
-  createQuestion,
-  listMyQuestions,
-  createExam,
-  getExamDetail,
-  startExamForStudent,
-  submitExam,
-  testMemberAccess,
-} from "../controllers/test.controller.js";
+  register,
+  login,
+  logout,
+  me,
+  debugToken,
+  confirmEmail,
+  resendConfirmCode,
+  forgotPassword,
+  resetPassword,
+} from "../controllers/auth.controller.js";
+import { authMiddleware } from "../middlewares/auth.middleware.js";
+
+import {
+  registerSchema,
+  loginSchema,
+} from "../validators/auth.validator.js";
 
 const router = express.Router();
 
-// Tất cả routes dưới đây yêu cầu đã đăng nhập
-router.use(authMiddleware);
+function validateBody(schema) {
+  return (req, res, next) => {
+    const { error, value } = schema.validate(req.body, {
+      abortEarly: false,  
+      stripUnknown: true,  
+    });
 
-// ====== API TEST PHÂN QUYỀN ======
-router.get("/member-test", requireRole("Member"), testMemberAccess);
+    if (error) {
+      return res.status(400).json({
+        message: "Validation error",
+        errors: error.details.map((d) => ({
+          field: d.path.join("."),
+          message: d.message,
+        })),
+      });
+    }
 
-// ====== Routes cho GIÁO VIÊN (Teacher, Admin) ======
-router.post("/questions", requireRole("Teacher", "Admin"), createQuestion);
-router.get("/questions", requireRole("Teacher", "Admin"), listMyQuestions);
+    req.body = value;
+    next();
+  };
+}
 
-router.post("/exams", requireRole("Teacher", "Admin"), createExam);
-router.get("/exams/:id", requireRole("Teacher", "Admin"), getExamDetail);
+router.post("/register", validateBody(registerSchema), register);
 
-// ====== Routes cho HỌC SINH (Member) làm bài ======
-// Bạn có thể cho Teacher/Admin làm thử nên mình cho luôn vào list role
-router.post(
-  "/exams/:id/start",
-  requireRole("Member", "Teacher", "Admin"),
-  startExamForStudent
-);
+router.post("/login", validateBody(loginSchema), login);
 
-router.post(
-  "/submissions/:id/submit",
-  requireRole("Member", "Teacher", "Admin"),
-  submitExam
-);
+router.post("/logout", logout);
+
+router.post("/confirm-email", confirmEmail);
+
+router.post("/resend-confirm-code", resendConfirmCode);
+
+router.post("/forgot-password", forgotPassword);
+
+router.post("/reset-password", resetPassword);
+
+router.get("/me", authMiddleware, me);
+
+router.get("/debug-token", authMiddleware, debugToken);
 
 export default router;

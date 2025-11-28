@@ -31,8 +31,14 @@ const ROLE_MAPPING = {
   4: "Admin",
 };
 
-//Đăng ký
-export async function register({ email, password, fullName, phone }) {
+// NEW: map từ string role FE gửi -> role_id trong DB
+const ROLE_KEY_TO_ID = {
+  member: 2,
+  teacher: 3,
+};
+
+// Đăng ký
+export async function register({ email, password, fullName, phone, role }) {
   const existing = await findUserByEmail(email);
 
   if (existing) {
@@ -69,6 +75,10 @@ export async function register({ email, password, fullName, phone }) {
     throw e;
   }
 
+  // 👉 NEW: xử lý role FE gửi lên
+  const normalizedRoleKey = (role || "").toLowerCase(); // "member" | "teacher"
+  const desiredRoleId = ROLE_KEY_TO_ID[normalizedRoleKey] ?? 2; // default Member nếu gửi bậy
+
   const passwordHash = await bcrypt.hash(password, 10);
   const newUser = await createUserWithProfile({
     email,
@@ -76,6 +86,7 @@ export async function register({ email, password, fullName, phone }) {
     phone,
     fullName,
     cognitoSub: userSub,
+    roleId: desiredRoleId, // 👈 NEW: truyền roleId xuống model
   });
 
   return {

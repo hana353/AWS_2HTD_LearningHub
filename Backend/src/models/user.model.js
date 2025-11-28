@@ -29,13 +29,29 @@ export async function findUserByEmail(email) {
   return result.recordset[0] || null;
 }
 
+// Tìm user theo cognito_sub (dùng cho accessToken)
+export async function findUserByCognitoSub(cognitoSub) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('cognito_sub', sql.NVarChar(255), cognitoSub);
+
+  const result = await request.query(`
+    SELECT TOP 1 id, email, password_hash, role_id, is_active, cognito_sub
+    FROM users
+    WHERE cognito_sub = @cognito_sub
+  `);
+
+  return result.recordset[0] || null;
+}
+
 // Tạo user + profile, gắn với cognito_sub
 export async function createUserWithProfile({
   email,
   passwordHash,
   phone,
   fullName,
-  cognitoSub
+  cognitoSub,
+  roleId   
 }) {
   await poolConnect;
 
@@ -47,7 +63,12 @@ export async function createUserWithProfile({
     userReq.input('email', sql.NVarChar(255), email);
     userReq.input('password_hash', sql.NVarChar(sql.MAX), passwordHash || null);
     userReq.input('phone', sql.NVarChar(50), phone || null);
-    userReq.input('role_id', sql.SmallInt, 2); // 2 = Member
+
+    // chỉ cho phép 2 (Member) hoặc 3 (Teacher), còn lại fallback về Member
+    const safeRoleId =
+      roleId && [2, 3].includes(Number(roleId)) ? Number(roleId) : MEMBER_ROLE_ID;
+
+    userReq.input('role_id', sql.SmallInt, safeRoleId);
     userReq.input('cognito_sub', sql.NVarChar(255), cognitoSub || null);
 
     const userResult = await userReq.query(`
@@ -230,3 +251,171 @@ export async function ensureSingleAdmin() {
 
   console.log('✅ Đã tạo mới tài khoản Admin mặc định:', ADMIN_EMAIL);
 }
+
+// Lấy danh sách user + profile + role, có phân trang + search
+export async function getUsersWithProfilePaginated(
+  page = 1,
+  pageSize = 10,
+  search = null
+) {
+  await poolConnect;
+
+  const safePage = Number(page) > 0 ? Number(page) : 1;
+  const safePageSize = Number(pageSize) > 0 ? Number(pageSize) : 10;
+  const offset = (safePage - 1) * safePageSize;
+
+  const listReq = pool.request();
+  listReq.input('offset', sql.Int, offset);
+  listReq.input('limit', sql.Int, safePageSize);
+  listReq.input('search', sql.NVarChar(255), search ? `%${search}%` : null);
+
+  const usersResult = await listReq.query(`
+    SELECT
+      u.id,
+      u.email,
+      u.phone,
+      u.role_id,
+      u.is_active,
+      u.email_verified,
+      u.created_at,
+      up.full_name,
+      r.name AS role_name
+    FROM users u
+    LEFT JOIN user_profiles up ON up.user_id = u.id
+    LEFT JOIN roles r ON r.id = u.role_id
+    WHERE 
+      u.is_active = 1
+      AND (
+        @search IS NULL
+        OR u.email LIKE @search
+        OR up.full_name LIKE @search
+      )
+    ORDER BY u.created_at DESC
+    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+  `);
+
+  const countReq = pool.request();
+  countReq.input('search', sql.NVarChar(255), search ? `%${search}%` : null);
+  const countResult = await countReq.query(`
+    SELECT COUNT(*) AS total
+    FROM users u
+    LEFT JOIN user_profiles up ON up.user_id = u.id
+    WHERE 
+      u.is_active = 1
+      AND (
+        @search IS NULL
+        OR u.email LIKE @search
+        OR up.full_name LIKE @search
+      );
+  `);
+
+  const total = countResult.recordset[0]?.total || 0;
+
+  return {
+    users: usersResult.recordset,
+    total,
+    page: safePage,
+    pageSize: safePageSize
+  };
+}
+
+// Cập nhật role cho user theo id
+export async function updateUserRoleById(userId, roleId) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('id', sql.UniqueIdentifier, userId);
+  request.input('role_id', sql.SmallInt, roleId);
+
+  const result = await request.query(`
+    UPDATE users
+    SET 
+      role_id = @role_id,
+      updated_at = SYSDATETIMEOFFSET()
+    OUTPUT inserted.id, inserted.email, inserted.role_id, inserted.is_active
+    WHERE id = @id;
+  `);
+
+  return result.recordset[0] || null;
+}
+
+// Xoá mềm user: set is_active = 0
+export async function softDeleteUserById(userId) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('id', sql.UniqueIdentifier, userId);
+
+  const result = await request.query(`
+    UPDATE users
+    SET 
+      is_active = 0,
+      updated_at = SYSDATETIMEOFFSET()
+    OUTPUT inserted.id
+    WHERE id = @id;
+  `);
+
+  return result.recordset[0] || null;
+}
+
+// Cập nhật profile (full_name) + phone + role cho user, dùng cho Admin
+export async function updateUserProfileAndRoleByAdmin(userId, { fullName, phone, roleId }) {
+  await poolConnect;
+
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    // Update bảng users: phone + role_id (nếu có)
+    const userReq = new sql.Request(transaction);
+    userReq.input('id', sql.UniqueIdentifier, userId);
+    userReq.input('phone', sql.NVarChar(50), phone ?? null);
+    userReq.input('role_id', sql.SmallInt, roleId ?? null);
+
+    await userReq.query(`
+      UPDATE users
+      SET
+        phone = COALESCE(@phone, phone),
+        role_id = CASE WHEN @role_id IS NULL THEN role_id ELSE @role_id END,
+        updated_at = SYSDATETIMEOFFSET()
+      WHERE id = @id;
+    `);
+
+    // Update bảng user_profiles: full_name
+    const profileReq = new sql.Request(transaction);
+    profileReq.input('user_id', sql.UniqueIdentifier, userId);
+    profileReq.input('full_name', sql.NVarChar(255), fullName ?? null);
+
+    await profileReq.query(`
+      UPDATE user_profiles
+      SET full_name = COALESCE(@full_name, full_name)
+      WHERE user_id = @user_id;
+    `);
+
+    await transaction.commit();
+
+    // Lấy lại user sau update
+    const updated = await findUserByIdWithProfile(userId);
+    return updated;
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+}
+
+// Khôi phục user đã xóa mềm: set is_active = 1
+export async function restoreUserById(userId) {
+  await poolConnect;
+  const request = pool.request();
+  request.input('id', sql.UniqueIdentifier, userId);
+
+  const result = await request.query(`
+    UPDATE users
+    SET 
+      is_active = 1,
+      updated_at = SYSDATETIMEOFFSET()
+    OUTPUT inserted.id
+    WHERE id = @id;
+  `);
+
+  return result.recordset[0] || null;
+}
+

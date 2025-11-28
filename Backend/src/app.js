@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 
 import authRoutes from "./routes/auth.routes.js";
 import testRoutes from "./routes/test.routes.js";
+import userRoutes from "./routes/user.routes.js";  
 import { errorHandler } from "./middlewares/error.middleware.js";
 
 dotenv.config();
@@ -27,6 +28,9 @@ app.use("/api/auth", authRoutes);
 
 // Test / Exam routes
 app.use("/api/tests", testRoutes);
+
+// User (admin) routes  
+app.use("/api", userRoutes);   
 
 // Error handler (để cuối cùng)
 app.use(errorHandler);
