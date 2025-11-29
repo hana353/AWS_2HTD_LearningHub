@@ -4,7 +4,7 @@
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
 import jwkToPem from "jwk-to-pem";
-import { findUserByEmail } from "../models/user.model.js";
+import { findUserByEmail, findUserByCognitoSub } from "../models/user.model.js";
 
 dotenv.config();
 
@@ -100,30 +100,56 @@ export async function authMiddleware(req, res, next) {
     else if (groups.includes("Teacher")) roleName = "Teacher";
     else if (groups.includes("Member")) roleName = "Member";
 
-    const roleId = COGNITO_GROUP_TO_ROLE_ID[roleName] || 1;
+    let roleId = COGNITO_GROUP_TO_ROLE_ID[roleName] || 1;
 
-    // 5. Tìm user local trong DB bằng email
-    const email =
-      payload.email || payload.username || payload["cognito:username"];
-    let localUserId = null;
+    // 5. Tìm user local trong DB
+
+    // email (nếu là idToken)
+    let email =
+      payload.email || payload.username || payload["cognito:username"] || null;
+
+    // cognito sub (dùng cho accessToken)
+    const cognitoSub =
+      payload.sub || payload["cognito:username"] || payload.username || null;
+
     let localUser = null;
+    let localUserId = null;
 
+    // ƯU TIÊN: nếu có email (idToken) thì tìm theo email
     if (email) {
       localUser = await findUserByEmail(email);
-      if (localUser) {
-        localUserId = localUser.id;
+    }
 
-        // Fallback: Nếu không có Cognito groups, dùng role từ DB
-        if (groups.length === 0 && localUser.role_id) {
-          const ROLE_ID_TO_NAME = {
-            1: "Guest",
-            2: "Member",
-            3: "Teacher",
-            4: "Admin",
-          };
-          roleName = ROLE_ID_TO_NAME[localUser.role_id] || "Guest";
-        }
+    // NẾU KHÔNG TÌM ĐƯỢC & có cognitoSub → thử lookup theo cognito_sub (accessToken)
+    if (!localUser && cognitoSub) {
+      localUser = await findUserByCognitoSub(cognitoSub);
+      // nếu tìm được bằng sub thì gán lại email cho req.user
+      if (localUser && !email) {
+        email = localUser.email;
       }
+    }
+
+    if (localUser) {
+      localUserId = localUser.id;
+
+      // Fallback: nếu token không có group thì dùng role DB
+      if (groups.length === 0 && localUser.role_id) {
+        const ROLE_ID_TO_NAME = {
+          1: "Guest",
+          2: "Member",
+          3: "Teacher",
+          4: "Admin"
+        };
+        roleName = ROLE_ID_TO_NAME[localUser.role_id] || "Guest";
+        roleId = localUser.role_id;
+      }
+    }
+
+    // Nếu vẫn không có user → không cho qua
+    if (!localUser) {
+      const err = new Error("Unauthorized");
+      err.statusCode = 401;
+      throw err;
     }
 
     // 6. Gắn thông tin user vào req để controller dùng
