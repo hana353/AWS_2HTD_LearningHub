@@ -2,14 +2,11 @@ import React, { useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom'; 
 // Import Logic & UI
 import useDashboardLogic from '../../hooks/useDashboardLogic'; 
-import Sidebar, { memberMenuItems } from '../ui/Sidebar'; // Sidebar kết hợp
+import Sidebar, { memberMenuItems, teacherMenuItems, adminMenuItems } from '../ui/Sidebar';
 import Header from '../ui/Header'; 
 
 // Cấu hình menu cho các role khác (ví dụ)
-export const teacherMenuItems = [
-    { label: 'Dashboard GV', to: '/teacher', icon: memberMenuItems[0].icon },
 
-];
 
 /**Layout kết hợp Logic và UI cho các trang Dashboard (Container)*/
 export default function DashboardLayout({ menuItems = memberMenuItems, role = 'member' }) {
@@ -93,3 +90,5 @@ export default function DashboardLayout({ menuItems = memberMenuItems, role = 'm
 
 // Export Member Layout để sử dụng
 export const MemberDashboardLayout = () => <DashboardLayout role='member' menuItems={memberMenuItems} />;
+export const TeacherDashboardLayout = () => <DashboardLayout role='teacher' menuItems={teacherMenuItems} />;
+export const AdminDashboardLayout = () => <DashboardLayout role='admin' menuItems={adminMenuItems} />;

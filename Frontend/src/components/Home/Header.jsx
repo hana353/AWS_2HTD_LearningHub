@@ -1,19 +1,50 @@
+
 import React, { useState } from 'react';
-import { Menu, X } from 'lucide-react';
-import { Link } from "react-router-dom";
+import { Menu, X, GraduationCap } from 'lucide-react';
+import { Link, useNavigate, useLocation } from "react-router-dom";
 
 export default function Header({ primaryColor = 'text-purple-800', primaryBg = 'bg-purple-600' }) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const navigate = useNavigate();
+    const location = useLocation();
 
+    // Thay "Blog" bằng "Lộ trình học" (giữ nguyên animation/UI)
     const navItems = [
         { label: "Home", to: "/" },
-        { label: "Khóa học", to: "/khoa-hoc" },
-        { label: "Luyện đề", to: "/luyen-de" },
-        { label: "Test đầu vào", to: "/test" },
-        { label: "Blog", to: "/blog" }
+        { label: "Khóa học", to: "/", target: "khoa-hoc" },
+        { label: "Luyện đề", to: "/", target: "luyen-de" },
+        { label: "Test đầu vào", to: "/", target: "test-dau-vao" },
+        { label: "Lộ trình học", to: "/", target: "lo-trinh" } // <-- changed
     ];
 
     const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
+    const scrollToId = (id) => {
+        if (!id) return;
+        const el = document.getElementById(id);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
+    const handleNavClick = (item) => {
+        // if nav item points to a section on HomePage
+        if (item.target) {
+            if (location.pathname === '/') {
+                // already on homepage -> scroll immediately
+                scrollToId(item.target);
+            } else {
+                // navigate to homepage and pass state so HomePage will scroll
+                navigate('/', { state: { scrollTo: item.target } });
+            }
+            // close mobile menu if open
+            setIsMenuOpen(false);
+            return;
+        }
+        // fallback: regular link
+        navigate(item.to);
+        setIsMenuOpen(false);
+    };
 
     return (
         <header className="flex justify-between items-center py-4 px-[5%] bg-white shadow-md z-50 relative">
@@ -22,21 +53,22 @@ export default function Header({ primaryColor = 'text-purple-800', primaryBg = '
                 {/* Logo */}
                 <Link
                     to="/"
-                    className={`text-2xl font-extrabold ${primaryColor} transition-colors duration-200`}
+                    className={`text-2xl font-extrabold flex items-center gap-2 ${primaryColor} transition-colors duration-200`}
                 >
+                    <GraduationCap size={28} className="text-purple-700" />
                     2HTD LearningHub
                 </Link>
 
                 {/* Desktop Navigation */}
                 <nav className="hidden md:flex gap-8 items-center">
                     {navItems.map((item, index) => (
-                        <Link
+                        <button
                             key={index}
-                            to={item.to}
-                            className="text-lg font-medium text-gray-600 hover:text-purple-600 transition duration-200"
+                            onClick={() => handleNavClick(item)}
+                            className="text-lg font-medium text-gray-600 hover:text-purple-600 hover:underline underline-offset-4 decoration-purple-600 transition duration-200"
                         >
                             {item.label}
-                        </Link>
+                        </button>
                     ))}
                 </nav>
 
@@ -69,20 +101,19 @@ export default function Header({ primaryColor = 'text-purple-800', primaryBg = '
             {isMenuOpen && (
                 <div className="absolute top-full left-0 w-full bg-white shadow-lg flex flex-col p-5 gap-4 md:hidden animate-in slide-in-from-top-5">
                     {navItems.map((item, index) => (
-                        <Link
+                        <button
                             key={index}
-                            to={item.to}
-                            onClick={toggleMenu}
-                            className="block py-2 text-lg font-medium text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg px-4 transition"
+                            onClick={() => handleNavClick(item)}
+                            className="block py-2 text-lg font-medium text-gray-700 hover:text-purple-600 hover:bg-purple-50 rounded-lg px-4 transition text-left"
                         >
                             {item.label}
-                        </Link>
+                        </button>
                     ))}
 
                     <div className="pt-4 space-y-3 border-t border-gray-100">
                         <Link
                             to="/auth/login"
-                            onClick={toggleMenu}
+                            onClick={() => setIsMenuOpen(false)}
                             className="block w-full text-center py-2 rounded-xl font-semibold border-2 border-purple-500 text-purple-500 hover:bg-purple-50 transition"
                         >
                             Login
@@ -90,7 +121,7 @@ export default function Header({ primaryColor = 'text-purple-800', primaryBg = '
 
                         <Link
                             to="/auth/register"
-                            onClick={toggleMenu}
+                            onClick={() => setIsMenuOpen(false)}
                             className={`block w-full text-center py-2 rounded-xl font-semibold ${primaryBg} text-white hover:opacity-90 transition`}
                         >
                             Register

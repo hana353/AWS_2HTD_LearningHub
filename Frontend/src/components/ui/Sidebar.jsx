@@ -8,6 +8,13 @@ import {
     Settings,
     LogOut,
     GraduationCap, 
+    // Thêm icons cho Teacher
+    Users, 
+    FileText,
+    ShieldCheck,
+    Database,
+    Shield,    // <-- Đây là icon bị thiếu gây ra lỗi
+    BarChart2
 } from 'lucide-react';
 
 // --- CONFIG: Danh sách Menu Items cho Member ---
@@ -17,6 +24,19 @@ export const memberMenuItems = [
     { label: 'Bài kiểm tra', to: '/member/test', icon: ClipboardList },
     { label: 'Thông báo', to: '/member/notifications', icon: Bell },
     { label: 'Cài đặt', to: '/member/settings', icon: Settings },
+];
+// --- MỚI: CONFIG: Danh sách Menu Items cho Teacher ---
+export const teacherMenuItems = [
+    { label: 'Tổng quan', to: '/teacher', icon: LayoutDashboard },
+    { label: 'Quản lý Lớp học', to: '/teacher/classes', icon: Users },
+    { label: 'Quản lý Bài tập', to: '/teacher/assignments', icon: FileText },
+    { label: 'Cài đặt', to: '/teacher/settings', icon: Settings },
+];
+export const adminMenuItems = [
+    { label: 'Tổng quan', to: '/admin', icon: LayoutDashboard },
+    { label: 'Người dùng', to: '/admin/users', icon: Users },         // Trang quản lý User
+    { label: 'Khóa học', to: '/admin/courses', icon: BookOpen },      // Trang quản lý Khóa học
+    { label: 'Cài đặt', to: '/admin/settings', icon: Settings },
 ];
 
 // --- CONFIG CHUNG ---
@@ -42,6 +62,7 @@ export default function Sidebar({
     onMouseLeave, 
     isMobileOpen, 
     onClose 
+    
 }) {
     const location = useLocation();
 

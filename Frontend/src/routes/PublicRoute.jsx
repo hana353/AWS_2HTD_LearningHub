@@ -8,13 +8,24 @@ import Layout from "../components/layout/Layout";
 import HomePage from "../pages/HomePage";
 import LoginPage from "../pages/LoginPage";
 import RegisterPage from "../pages/RegisterPage";
-import { MemberDashboardLayout } from "../components/layout/DashboardLayout";
+import { MemberDashboardLayout, TeacherDashboardLayout, AdminDashboardLayout } from "../components/layout/DashboardLayout";
 
 // Pages - Protected
+// Admin min
 import AdminDashboard from "../pages/Admin/AdminDashboard";
+import AdminUsers from "../pages/Admin/AdminUsers"; // Giả sử bạn lưu ở đây
+import AdminCourses from "../pages/Admin/AdminCourses";
+// Member 
 import MemberDashboard from "../pages/Member/MemberDashboard";
+import Courses from "../pages/Member/Courses";
+import MemberTests from "../pages/Member/MemberTests";
+import MemberNotifications from "../pages/Member/MemberNotifications";
+import MemberSettings from "../pages/Member/MemberSettings";
+//Teacher
 import TeacherDashboard from "../pages/Teacher/TeacherDashboard";
-
+import TeacherClasses from "../pages/Teacher/TeacherClasses";
+import TeacherAssignments from "../pages/Teacher/TeacherAssignments";
+import TeacherSettings from "../pages/Teacher/TeacherSettings";
 // Routes Protection
 import PrivateRoute from "./PrivateRoute";
 
@@ -56,6 +67,10 @@ const routes = createBrowserRouter([
         ),
         children: [
             { index: true, element: <MemberDashboard /> },
+              { path: "courses", element: <Courses /> },
+              { path: "test", element: <MemberTests /> },
+      { path: "notifications", element: <MemberNotifications /> },
+      { path: "settings", element: <MemberSettings /> },
             { path: "*", element: <Navigate to="/member" replace /> },
         ],
     },
@@ -65,11 +80,14 @@ const routes = createBrowserRouter([
         path: "/teacher",
         element: (
             <PrivateRoute allowedRoles={["teacher"]}>
-                <Outlet />
+                <TeacherDashboardLayout />
             </PrivateRoute>
         ),
         children: [
             { index: true, element: <TeacherDashboard /> },
+            { path: "classes", element: <TeacherClasses /> },
+            { path: "assignments", element: <TeacherAssignments /> },
+            { path: "settings", element: <TeacherSettings /> },
             { path: "*", element: <Navigate to="/teacher" replace /> },
         ],
     },
@@ -79,11 +97,13 @@ const routes = createBrowserRouter([
         path: "/admin",
         element: (
             <PrivateRoute allowedRoles={["Admin", "4"]}>
-                <AdminDashboard />
+               <AdminDashboardLayout />
             </PrivateRoute>
         ),
         children: [
             { index: true, element: <AdminDashboard /> },
+            { path: "users", element: <AdminUsers /> },      // Route mới
+            { path: "courses", element: <AdminCourses /> },  // Route mới
             { path: "*", element: <Navigate to="/admin" replace /> },
         ],
     },
