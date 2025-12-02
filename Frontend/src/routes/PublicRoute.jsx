@@ -15,6 +15,7 @@ import { MemberDashboardLayout, TeacherDashboardLayout, AdminDashboardLayout } f
 import AdminDashboard from "../pages/Admin/AdminDashboard";
 import AdminUsers from "../pages/Admin/AdminUsers"; // Giả sử bạn lưu ở đây
 import AdminCourses from "../pages/Admin/AdminCourses";
+import AdminSettings from "../pages/Admin/AdminSettings";
 // Member 
 import MemberDashboard from "../pages/Member/MemberDashboard";
 import Courses from "../pages/Member/Courses";
@@ -102,8 +103,9 @@ const routes = createBrowserRouter([
         ),
         children: [
             { index: true, element: <AdminDashboard /> },
-            { path: "users", element: <AdminUsers /> },      // Route mới
-            { path: "courses", element: <AdminCourses /> },  // Route mới
+            { path: "users", element: <AdminUsers /> },      
+            { path: "courses", element: <AdminCourses /> },
+            { path: "settings", element: <AdminSettings /> }, 
             { path: "*", element: <Navigate to="/admin" replace /> },
         ],
     },

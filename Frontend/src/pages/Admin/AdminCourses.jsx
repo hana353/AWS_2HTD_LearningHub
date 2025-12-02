@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
     Search, Plus, BookOpen, Users, Star, 
     LayoutGrid, List, Filter, Edit, Trash2, Eye, FileText,
-    CheckCircle, AlertCircle, X, Save, Layers
+    CheckCircle, AlertCircle, X, Save, Layers, Check, XCircle
 } from 'lucide-react';
 
 export default function AdminCourses() {
@@ -15,7 +15,7 @@ export default function AdminCourses() {
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [currentCourse, setCurrentCourse] = useState(null);
 
-    // --- MOCK DATA (Đã bỏ trường price) ---
+    // --- MOCK DATA ---
     const [courses, setCourses] = useState([
         { 
             id: 1, 
@@ -58,7 +58,7 @@ export default function AdminCourses() {
             students: 150, 
             lessons: 18,
             rating: 4.6, 
-            status: 'Review', 
+            status: 'Review', // Trạng thái chờ duyệt
             img: 'bg-gradient-to-br from-purple-400 to-indigo-600' 
         },
         { 
@@ -71,6 +71,17 @@ export default function AdminCourses() {
             rating: 4.2, 
             status: 'Draft', 
             img: 'bg-gray-400' 
+        },
+        { 
+            id: 6, 
+            title: 'Phát âm chuẩn Mỹ (Review Demo)', 
+            category: 'Pronunciation',
+            teacher: 'Ms. Sarah', 
+            students: 10, 
+            lessons: 8,
+            rating: 0, 
+            status: 'Review', // Thêm 1 item chờ duyệt để test
+            img: 'bg-gradient-to-br from-pink-400 to-rose-600' 
         },
     ]);
 
@@ -85,7 +96,7 @@ export default function AdminCourses() {
 
     // 2. Mở Modal Sửa
     const handleEditClick = (course) => {
-        setCurrentCourse({ ...course }); // Clone object để không sửa trực tiếp vào state gốc khi chưa Lưu
+        setCurrentCourse({ ...course }); 
         setIsEditModalOpen(true);
     };
 
@@ -95,13 +106,32 @@ export default function AdminCourses() {
             alert("Vui lòng nhập tên khóa học và giảng viên!");
             return;
         }
-        
         const updatedCourses = courses.map(c => 
             c.id === currentCourse.id ? currentCourse : c
         );
         setCourses(updatedCourses);
         setIsEditModalOpen(false);
         setCurrentCourse(null);
+    };
+
+    // 4. DUYỆT BÀI (Approve)
+    const handleApprove = (id, title) => {
+        if(window.confirm(`Xác nhận DUYỆT và CÔNG KHAI khóa học: "${title}"?`)) {
+            const updatedCourses = courses.map(c => 
+                c.id === id ? { ...c, status: 'Published' } : c
+            );
+            setCourses(updatedCourses);
+        }
+    };
+
+    // 5. TỪ CHỐI BÀI (Reject)
+    const handleReject = (id, title) => {
+        if(window.confirm(`Từ chối duyệt và trả về BẢN NHÁP: "${title}"?`)) {
+            const updatedCourses = courses.map(c => 
+                c.id === id ? { ...c, status: 'Draft' } : c
+            );
+            setCourses(updatedCourses);
+        }
     };
 
     // Helper: Render Status Badge
@@ -112,7 +142,7 @@ export default function AdminCourses() {
             case 'Draft': 
                 return <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200"><FileText size={12}/> Draft</span>;
             case 'Review': 
-                return <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200"><AlertCircle size={12}/> Review</span>;
+                return <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200 animate-pulse"><AlertCircle size={12}/> Review</span>;
             default: return null;
         }
     };
@@ -124,6 +154,9 @@ export default function AdminCourses() {
                             course.teacher.toLowerCase().includes(searchTerm.toLowerCase());
         return matchStatus && matchSearch;
     });
+
+    // Count pending reviews
+    const pendingCount = useMemo(() => courses.filter(c => c.status === 'Review').length, [courses]);
 
     // --- RENDER ---
     return (
@@ -157,16 +190,24 @@ export default function AdminCourses() {
                     </div>
                     <div className="flex items-center gap-2">
                         <Filter size={18} className="text-gray-400" />
-                        <select 
-                            className="px-3 py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm focus:outline-none focus:border-[#5a4d8c] cursor-pointer bg-white"
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value)}
-                        >
-                            <option value="All">Tất cả trạng thái</option>
-                            <option value="Published">Đang hoạt động</option>
-                            <option value="Draft">Bản nháp</option>
-                            <option value="Review">Chờ duyệt</option>
-                        </select>
+                        <div className="relative">
+                            <select 
+                                className="px-3 py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm focus:outline-none focus:border-[#5a4d8c] cursor-pointer bg-white pr-8"
+                                value={filterStatus}
+                                onChange={(e) => setFilterStatus(e.target.value)}
+                            >
+                                <option value="All">Tất cả trạng thái</option>
+                                <option value="Published">Đang hoạt động</option>
+                                <option value="Draft">Bản nháp</option>
+                                <option value="Review">Chờ duyệt</option>
+                            </select>
+                            {/* Badge thông báo số lượng cần duyệt */}
+                            {pendingCount > 0 && filterStatus !== 'Review' && (
+                                <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white">
+                                    {pendingCount}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -192,7 +233,7 @@ export default function AdminCourses() {
                 /* --- GRID VIEW --- */
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
                     {filteredCourses.map((course) => (
-                        <div key={course.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg transition duration-300 group overflow-hidden flex flex-col">
+                        <div key={course.id} className={`bg-white rounded-2xl border shadow-sm hover:shadow-lg transition duration-300 group overflow-hidden flex flex-col ${course.status === 'Review' ? 'border-yellow-200 ring-1 ring-yellow-100' : 'border-gray-100'}`}>
                             {/* Image Header */}
                             <div className={`h-44 w-full ${course.img} flex flex-col justify-between p-4 relative`}>
                                 <div className="flex justify-between items-start">
@@ -215,7 +256,7 @@ export default function AdminCourses() {
                                     Giảng viên: <span className="font-medium text-gray-700">{course.teacher}</span>
                                 </p>
 
-                                {/* Stats Grid (Đã bỏ giá) */}
+                                {/* Stats Grid */}
                                 <div className="flex justify-between text-sm text-gray-600 mt-auto mb-4 border-t border-gray-50 pt-3">
                                     <div className="flex flex-col items-center">
                                         <Users size={16} className="text-blue-500 mb-1"/> 
@@ -231,17 +272,36 @@ export default function AdminCourses() {
                                     </div>
                                 </div>
 
-                                {/* Action Buttons */}
+                                {/* Action Buttons - LOGIC DUYỆT BÀI */}
                                 <div className="flex gap-2 pt-2">
-                                    <button className="flex-1 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition flex items-center justify-center gap-1">
-                                        <Eye size={16}/> Xem
-                                    </button>
-                                    <button 
-                                        onClick={() => handleEditClick(course)}
-                                        className="flex-1 py-2 text-sm font-medium text-[#5a4d8c] bg-purple-50 rounded-lg hover:bg-[#5a4d8c] hover:text-white transition flex items-center justify-center gap-1"
-                                    >
-                                        <Edit size={16}/> Sửa
-                                    </button>
+                                    {course.status === 'Review' ? (
+                                        <>
+                                            <button 
+                                                onClick={() => handleReject(course.id, course.title)}
+                                                className="flex-1 py-2 text-sm font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition flex items-center justify-center gap-1"
+                                            >
+                                                <XCircle size={16}/> Từ chối
+                                            </button>
+                                            <button 
+                                                onClick={() => handleApprove(course.id, course.title)}
+                                                className="flex-1 py-2 text-sm font-bold text-green-700 bg-green-50 rounded-lg hover:bg-green-100 transition flex items-center justify-center gap-1"
+                                            >
+                                                <Check size={16}/> Duyệt
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button className="flex-1 py-2 text-sm font-medium text-gray-600 bg-gray-50 rounded-lg hover:bg-gray-100 transition flex items-center justify-center gap-1">
+                                                <Eye size={16}/> Xem
+                                            </button>
+                                            <button 
+                                                onClick={() => handleEditClick(course)}
+                                                className="flex-1 py-2 text-sm font-medium text-[#5a4d8c] bg-purple-50 rounded-lg hover:bg-[#5a4d8c] hover:text-white transition flex items-center justify-center gap-1"
+                                            >
+                                                <Edit size={16}/> Sửa
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -257,7 +317,6 @@ export default function AdminCourses() {
                                     <th className="p-4 pl-6">Khóa học</th>
                                     <th className="p-4">Danh mục</th>
                                     <th className="p-4">Giảng viên</th>
-                                    {/* Đã bỏ cột Học phí */}
                                     <th className="p-4 text-center">Thống kê</th>
                                     <th className="p-4 text-center">Trạng thái</th>
                                     <th className="p-4 text-right pr-6">Hành động</th>
@@ -265,7 +324,7 @@ export default function AdminCourses() {
                             </thead>
                             <tbody className="divide-y divide-gray-100 text-sm">
                                 {filteredCourses.map((course) => (
-                                    <tr key={course.id} className="hover:bg-purple-50/30 transition group">
+                                    <tr key={course.id} className={`hover:bg-purple-50/30 transition group ${course.status === 'Review' ? 'bg-yellow-50/30' : ''}`}>
                                         <td className="p-4 pl-6">
                                             <div className="flex items-center gap-3">
                                                 <div className={`w-10 h-10 rounded-lg ${course.img} flex items-center justify-center text-white shadow-sm`}>
@@ -296,20 +355,51 @@ export default function AdminCourses() {
                                             </div>
                                         </td>
                                         <td className="p-4 text-right pr-6">
-                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button 
-                                                    onClick={() => handleEditClick(course)}
-                                                    className="p-2 text-[#5a4d8c] hover:bg-purple-50 rounded-lg transition" title="Chỉnh sửa"
-                                                >
-                                                    <Edit size={18} />
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleDelete(course.id)}
-                                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition" 
-                                                    title="Xóa khóa học"
-                                                >
-                                                    <Trash2 size={18} />
-                                                </button>
+                                            <div className="flex justify-end gap-2">
+                                                {/* ACTIONS CHO TRẠNG THÁI REVIEW */}
+                                                {course.status === 'Review' ? (
+                                                    <>
+                                                        <button 
+                                                            onClick={() => handleApprove(course.id, course.title)}
+                                                            className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition border border-green-200" 
+                                                            title="Duyệt bài"
+                                                        >
+                                                            <Check size={18} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleReject(course.id, course.title)}
+                                                            className="p-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-lg transition border border-red-200" 
+                                                            title="Từ chối"
+                                                        >
+                                                            <XCircle size={18} />
+                                                        </button>
+                                                        {/* Vẫn cho phép sửa khi đang Review để admin chỉnh lại lỗi nhỏ */}
+                                                        <button 
+                                                            onClick={() => handleEditClick(course)}
+                                                            className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition" 
+                                                            title="Xem/Sửa chi tiết"
+                                                        >
+                                                            <Edit size={18} />
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    // ACTIONS THÔNG THƯỜNG
+                                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                                        <button 
+                                                            onClick={() => handleEditClick(course)}
+                                                            className="p-2 text-[#5a4d8c] hover:bg-purple-50 rounded-lg transition" title="Chỉnh sửa"
+                                                        >
+                                                            <Edit size={18} />
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDelete(course.id)}
+                                                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition" 
+                                                            title="Xóa khóa học"
+                                                        >
+                                                            <Trash2 size={18} />
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -331,7 +421,7 @@ export default function AdminCourses() {
                 </div>
             )}
 
-            {/* --- MODAL CHỈNH SỬA (NEW) --- */}
+            {/* --- MODAL CHỈNH SỬA --- */}
             {isEditModalOpen && currentCourse && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all scale-100">
