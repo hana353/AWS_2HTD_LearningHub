@@ -9,6 +9,7 @@ import authRoutes from "./routes/auth.routes.js";
 import testRoutes from "./routes/test.routes.js";
 import userRoutes from "./routes/user.routes.js";  
 import practiceRoutes from './routes/practice.routes.js';
+import courseRoutes from "./routes/course.routes.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 
 dotenv.config();
@@ -35,6 +36,9 @@ app.use("/api", userRoutes);
 
 //Practice
 app.use('/api/practices', practiceRoutes);
+
+//Course
+app.use("/api", courseRoutes);
 
 // Error handler (để cuối cùng)
 app.use(errorHandler);
