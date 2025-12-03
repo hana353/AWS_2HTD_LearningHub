@@ -55,6 +55,6 @@ router.delete('/admin/users/:id', authMiddleware, requireRole('Admin'), deleteUs
 router.patch('/admin/users/:id/restore', authMiddleware,requireRole('Admin'), restoreUser);
 
 //List User Soft Delete
-router.get('/admin/users/deleted', requireAdmin, getSoftDeletedUserList);
+router.get('/admin/users/deleted', authMiddleware, requireRole('Admin'), getSoftDeletedUserList);
 
 export default router;

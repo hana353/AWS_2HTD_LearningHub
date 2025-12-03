@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     FileText, Plus, Trash, Save, CheckCircle, 
     Clock, AlertCircle, X, Search, MoreVertical,
     Calendar, Users, ChevronRight, LayoutList, PenTool
 } from 'lucide-react';
+import { getExams, createQuestion } from '../../services/teacherService';
 
 export default function TeacherAssignments() {
     // --- STATE & DATA ---
     const [view, setView] = useState('list'); // 'list' | 'create'
     const [filterClass, setFilterClass] = useState('All');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     // Dữ liệu Lớp học (Đồng bộ với Dashboard)
     const mockClasses = [
@@ -18,29 +21,43 @@ export default function TeacherAssignments() {
         { id: 'CLS004', name: 'Communication Master' },
     ];
 
-    // Dữ liệu Bài tập mẫu
-    const [assignments, setAssignments] = useState([
-        { 
-            id: 1, 
-            title: 'Mid-term Test: Listening & Reading', 
-            classId: 'CLS003', 
-            className: 'IELTS Intensive 7.0+',
-            duration: 60, 
-            questionsCount: 40,
-            status: 'Active', // Active, Draft, Ended
-            dueDate: '2023-11-15'
-        },
-        { 
-            id: 2, 
-            title: 'Vocabulary Quiz: Unit 5', 
-            classId: 'CLS001', 
-            className: 'IELTS Foundation K12',
-            duration: 15, 
-            questionsCount: 10,
-            status: 'Draft',
-            dueDate: ''
-        },
-    ]);
+    // Dữ liệu Bài tập từ API
+    const [assignments, setAssignments] = useState([]);
+
+    // Fetch dữ liệu đề thi từ API
+    useEffect(() => {
+        const fetchExams = async () => {
+            try {
+                setLoading(true);
+                setError(null);
+                const response = await getExams();
+                
+                // Map dữ liệu từ API sang format của component
+                const mappedAssignments = response.items.map((exam) => ({
+                    id: exam.id,
+                    title: exam.title,
+                    classId: null, // API không có thông tin lớp
+                    className: 'Chưa giao (Ngân hàng đề)',
+                    duration: exam.duration_minutes || 0,
+                    questionsCount: 0, // API không có thông tin số câu hỏi
+                    status: exam.published ? 'Active' : 'Draft',
+                    dueDate: null,
+                    description: exam.description,
+                    passingScore: exam.passing_score,
+                    createdAt: exam.created_at
+                }));
+                
+                setAssignments(mappedAssignments);
+            } catch (err) {
+                setError(err.message || 'Không thể tải danh sách đề thi');
+                console.error('Error fetching exams:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchExams();
+    }, []);
 
     // State cho Form tạo mới
     const [newExam, setNewExam] = useState({
@@ -96,7 +113,7 @@ export default function TeacherAssignments() {
         setNewExam({ ...newExam, questions: updated });
     };
 
-    const handleSaveExam = () => {
+    const handleSaveExam = async () => {
         if (!newExam.title) return alert("Vui lòng nhập tên đề thi!");
         
         const selectedClass = mockClasses.find(c => c.id === newExam.classId);
@@ -112,8 +129,35 @@ export default function TeacherAssignments() {
             dueDate: newExam.dueDate || 'N/A'
         };
 
-        setAssignments([examData, ...assignments]);
-        setView('list');
+        try {
+            // Cập nhật UI trước để tránh cảm giác chậm
+            setAssignments([examData, ...assignments]);
+
+            // Map từng câu hỏi sang payload của API /api/tests/questions
+            const questionPayloads = newExam.questions.map((q, index) => ({
+                title: `Câu ${index + 1}: ${q.text || "Không tiêu đề"}`,
+                body: q.text,
+                type: "multiple_choice", // tạm thời map kiểu multiple choice
+                difficulty: 2,
+                tags: ["exam", "teacher_created"],
+                choices: q.options.map((opt, oIndex) => ({
+                    text: opt,
+                    value: String.fromCharCode(65 + oIndex), // A, B, C, D...
+                    isCorrect: q.correct === oIndex,
+                })),
+            }));
+
+            // Gọi API tạo từng câu hỏi
+            for (const payload of questionPayloads) {
+                await createQuestion(payload);
+            }
+
+            alert("Lưu đề thi và câu hỏi thành công!");
+            setView('list');
+        } catch (error) {
+            console.error("Error when saving exam/questions:", error);
+            alert(error.message || "Có lỗi xảy ra khi lưu đề thi / câu hỏi");
+        }
     };
 
     // --- RENDER HELPERS ---
@@ -318,7 +362,29 @@ export default function TeacherAssignments() {
                 </div>
             </div>
 
+            {/* Loading State */}
+            {loading && (
+                <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#5a4d8c] mb-4"></div>
+                        <p className="text-gray-500">Đang tải danh sách đề thi...</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Error State */}
+            {error && !loading && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+                    <AlertCircle className="text-red-500" size={24} />
+                    <div>
+                        <p className="text-red-700 font-semibold">Lỗi khi tải dữ liệu</p>
+                        <p className="text-red-600 text-sm">{error}</p>
+                    </div>
+                </div>
+            )}
+
             {/* Assignments Grid */}
+            {!loading && !error && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {assignments
                     .filter(a => filterClass === 'All' || a.classId === filterClass)
@@ -390,6 +456,22 @@ export default function TeacherAssignments() {
                     <span className="font-semibold">Soạn đề thi mới</span>
                 </button>
             </div>
+            )}
+
+            {/* Empty State */}
+            {!loading && !error && assignments.length === 0 && (
+                <div className="text-center py-12">
+                    <FileText className="mx-auto text-gray-300 mb-4" size={64} />
+                    <p className="text-gray-500 text-lg mb-2">Chưa có đề thi nào</p>
+                    <p className="text-gray-400 text-sm mb-6">Hãy tạo đề thi mới để bắt đầu</p>
+                    <button 
+                        onClick={handleCreateClick}
+                        className="bg-[#5a4d8c] text-white px-5 py-2.5 rounded-xl font-medium shadow-md hover:bg-[#483d73] transition flex items-center gap-2 mx-auto"
+                    >
+                        <Plus size={20} /> Tạo đề thi mới
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
