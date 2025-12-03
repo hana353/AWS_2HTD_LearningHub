@@ -419,3 +419,69 @@ export async function restoreUserById(userId) {
   return result.recordset[0] || null;
 }
 
+// Lấy danh sách user đã xóa mềm (is_active = 0) + profile + role, có phân trang + search
+export async function getSoftDeletedUsersWithProfilePaginated(
+  page = 1,
+  pageSize = 10,
+  search = null
+) {
+  await poolConnect;
+
+  const safePage = Number(page) > 0 ? Number(page) : 1;
+  const safePageSize = Number(pageSize) > 0 ? Number(pageSize) : 10;
+  const offset = (safePage - 1) * safePageSize;
+
+  const listReq = pool.request();
+  listReq.input('offset', sql.Int, offset);
+  listReq.input('limit', sql.Int, safePageSize);
+  listReq.input('search', sql.NVarChar(255), search ? `%${search}%` : null);
+
+  const usersResult = await listReq.query(`
+    SELECT
+      u.id,
+      u.email,
+      u.phone,
+      u.role_id,
+      u.is_active,
+      u.email_verified,
+      u.created_at,
+      up.full_name,
+      r.name AS role_name
+    FROM users u
+    LEFT JOIN user_profiles up ON up.user_id = u.id
+    LEFT JOIN roles r ON r.id = u.role_id
+    WHERE 
+      u.is_active = 0
+      AND (
+        @search IS NULL
+        OR u.email LIKE @search
+        OR up.full_name LIKE @search
+      )
+    ORDER BY u.created_at DESC
+    OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+  `);
+
+  const countReq = pool.request();
+  countReq.input('search', sql.NVarChar(255), search ? `%${search}%` : null);
+  const countResult = await countReq.query(`
+    SELECT COUNT(*) AS total
+    FROM users u
+    LEFT JOIN user_profiles up ON up.user_id = u.id
+    WHERE 
+      u.is_active = 0
+      AND (
+        @search IS NULL
+        OR u.email LIKE @search
+        OR up.full_name LIKE @search
+      );
+  `);
+
+  const total = countResult.recordset[0]?.total || 0;
+
+  return {
+    users: usersResult.recordset,
+    total,
+    page: safePage,
+    pageSize: safePageSize
+  };
+}

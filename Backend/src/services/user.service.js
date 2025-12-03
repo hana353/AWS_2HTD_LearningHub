@@ -5,7 +5,8 @@ import {
   findUserByIdWithProfile,
   updateUserProfileAndRoleByAdmin,
   softDeleteUserById,
-  restoreUserById
+  restoreUserById,
+  getSoftDeletedUsersWithProfilePaginated
 } from '../models/user.model.js';
 
 const ROLE_KEY_TO_ID = {
@@ -108,4 +109,28 @@ export async function restoreUserAsAdmin(targetUserId) {
   }
   const restored = await restoreUserById(targetUserId);
   return restored;
+}
+
+// List user đã xóa mềm + search + phân trang
+export async function listSoftDeletedUsers({ page, limit, search }) {
+  const pageNumber = Number(page) > 0 ? Number(page) : 1;
+  const pageSize = Number(limit) > 0 ? Number(limit) : 10;
+
+  const { users, total } = await getSoftDeletedUsersWithProfilePaginated(
+    pageNumber,
+    pageSize,
+    search || null
+  );
+
+  const totalPages = Math.ceil(total / pageSize) || 1;
+
+  return {
+    users,
+    pagination: {
+      page: pageNumber,
+      limit: pageSize,
+      total,
+      totalPages
+    }
+  };
 }

@@ -1,6 +1,6 @@
 // src/controllers/user.controller.js
 
-import { listUsers, editUserByAdmin, deleteUserAsAdmin, restoreUserAsAdmin} from '../services/user.service.js';
+import { listUsers, editUserByAdmin, deleteUserAsAdmin, restoreUserAsAdmin,   listSoftDeletedUsers} from '../services/user.service.js';
 import { register as registerService } from '../services/auth.service.js';
 
 // List user cho Admin
@@ -107,6 +107,36 @@ export async function restoreUser(req, res, next) {
     return res.status(200).json({
       success: true,
       message: 'User restored successfully'
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+// List user đã xóa mềm cho Admin
+export async function getSoftDeletedUserList(req, res, next) {
+  try {
+    const { page, limit, search } = req.query;
+
+    const result = await listSoftDeletedUsers({ page, limit, search });
+
+    const users = result.users.map((u) => ({
+      id: u.id,
+      full_name: u.full_name,
+      email: u.email,
+      phone: u.phone,
+      role_name: u.role_name,
+      email_verified: u.email_verified,
+      created_at: u.created_at
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: 'Soft deleted user list fetched successfully',
+      data: {
+        users,
+        pagination: result.pagination
+      }
     });
   } catch (err) {
     next(err);

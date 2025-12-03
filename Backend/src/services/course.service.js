@@ -500,3 +500,104 @@ export const getMyCoursesService = async (userId, statusFilter) => {
 
   return result.recordset;
 };
+
+// ================== TEACHER - COURSE MAPPING ==================
+// Admin gán teacher vào course
+export const addTeacherToCourseService = async (courseId, teacherId) => {
+  const request = await getRequest();
+  request.input("CourseId", sql.UniqueIdentifier, courseId);
+  request.input("TeacherId", sql.UniqueIdentifier, teacherId);
+
+  // Check teacher tồn tại & đúng role Teacher (3)
+  const checkTeacher = await request.query(`
+    SELECT TOP 1 id, role_id
+    FROM users
+    WHERE id = @TeacherId;
+  `);
+
+  if (checkTeacher.recordset.length === 0) {
+    const error = new Error("TEACHER_NOT_FOUND");
+    error.code = "TEACHER_NOT_FOUND";
+    throw error;
+  }
+
+  if (checkTeacher.recordset[0].role_id !== 3) {
+    const error = new Error("USER_NOT_TEACHER_ROLE");
+    error.code = "USER_NOT_TEACHER_ROLE";
+    throw error;
+  }
+
+  // Nếu chưa tồn tại thì insert
+  const result = await request.query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM course_teachers
+      WHERE course_id = @CourseId AND teacher_id = @TeacherId
+    )
+    BEGIN
+      INSERT INTO course_teachers (course_id, teacher_id)
+      VALUES (@CourseId, @TeacherId);
+    END
+
+    SELECT course_id AS courseId, teacher_id AS teacherId
+    FROM course_teachers
+    WHERE course_id = @CourseId AND teacher_id = @TeacherId;
+  `);
+
+  return result.recordset[0];
+};
+
+// Admin bỏ gán teacher khỏi course
+export const removeTeacherFromCourseService = async (courseId, teacherId) => {
+  const request = await getRequest();
+  request.input("CourseId", sql.UniqueIdentifier, courseId);
+  request.input("TeacherId", sql.UniqueIdentifier, teacherId);
+
+  const result = await request.query(`
+    DELETE FROM course_teachers
+    WHERE course_id = @CourseId AND teacher_id = @TeacherId;
+  `);
+
+  return result.rowsAffected[0] || 0;
+};
+
+// Teacher lấy list course mình dạy
+export const getTeacherCoursesService = async (teacherId) => {
+  const request = await getRequest();
+  request.input("TeacherId", sql.UniqueIdentifier, teacherId);
+
+  const result = await request.query(`
+    SELECT 
+      c.id AS courseId,
+      c.slug,
+      c.title,
+      c.short_description AS shortDescription,
+      c.description,
+      c.price,
+      c.currency,
+      c.creator_id AS creatorId,
+      c.published,
+      c.published_at AS publishedAt,
+      c.created_at AS createdAt
+    FROM courses c
+    JOIN course_teachers ct ON c.id = ct.course_id
+    WHERE ct.teacher_id = @TeacherId
+    ORDER BY c.created_at DESC;
+  `);
+
+  return result.recordset;
+};
+
+// Check 1 teacher có được gán vào course không
+export const isTeacherOfCourseService = async (courseId, teacherId) => {
+  const request = await getRequest();
+  request.input("CourseId", sql.UniqueIdentifier, courseId);
+  request.input("TeacherId", sql.UniqueIdentifier, teacherId);
+
+  const result = await request.query(`
+    SELECT TOP 1 1 AS isTeacher
+    FROM course_teachers
+    WHERE course_id = @CourseId AND teacher_id = @TeacherId;
+  `);
+
+  return result.recordset.length > 0;
+};

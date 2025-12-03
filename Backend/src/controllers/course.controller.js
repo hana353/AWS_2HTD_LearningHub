@@ -13,6 +13,10 @@ import {
   enrollCourseService,
   updateLectureProgressService,
   getMyCoursesService,
+  addTeacherToCourseService,
+  removeTeacherFromCourseService,
+  getTeacherCoursesService,
+  isTeacherOfCourseService,
 } from "../services/course.service.js";
 
 // ===== Helpers: lấy userId & roleId từ req.user =====
@@ -84,7 +88,6 @@ export const createCourse = async (req, res) => {
   } catch (err) {
     console.error("createCourse error:", err);
 
-    // lỗi unique slug
     if (
       err?.originalError?.info?.number === 2627 ||
       err?.originalError?.info?.number === 2601
@@ -128,7 +131,6 @@ export const updateCourse = async (req, res) => {
         .json({ message: "Forbidden: chỉ creator hoặc Admin được sửa" });
     }
 
-    // merge dữ liệu
     const merged = {
       slug: payload.slug ?? existing.slug,
       title: payload.title ?? existing.title,
@@ -145,7 +147,6 @@ export const updateCourse = async (req, res) => {
       publishedAt: existing.publishedAt,
     };
 
-    // logic published_at
     if (payload.published === true && !existing.published) {
       merged.publishedAt = new Date();
     } else if (payload.published === false && existing.published) {
@@ -210,6 +211,135 @@ export const deleteCourse = async (req, res) => {
   }
 };
 
+// ========== ADMIN: Gán / bỏ gán Teacher cho Course ==========
+
+// POST /api/admin/courses/:courseId/teachers
+export const assignTeacherToCourse = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !isAdmin(user)) {
+      return res.status(403).json({ message: "Forbidden: Admin only" });
+    }
+
+    const { courseId } = req.params;
+    const { teacherId } = req.body;
+
+    if (!teacherId) {
+      return res.status(400).json({ message: "teacherId là bắt buộc" });
+    }
+
+    const existingCourse = await getCourseByIdService(courseId);
+    if (!existingCourse) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    const assignment = await addTeacherToCourseService(courseId, teacherId);
+
+    return res.status(201).json({
+      message: "Teacher assigned to course",
+      assignment,
+    });
+  } catch (err) {
+    console.error("assignTeacherToCourse error:", err);
+
+    if (err.code === "TEACHER_NOT_FOUND") {
+      return res.status(404).json({ message: "Teacher user not found" });
+    }
+    if (err.code === "USER_NOT_TEACHER_ROLE") {
+      return res
+        .status(400)
+        .json({ message: "User is not in Teacher role (role_id != 3)" });
+    }
+
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// DELETE /api/admin/courses/:courseId/teachers/:teacherId
+export const removeTeacherFromCourse = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !isAdmin(user)) {
+      return res.status(403).json({ message: "Forbidden: Admin only" });
+    }
+
+    const { courseId, teacherId } = req.params;
+
+    const existingCourse = await getCourseByIdService(courseId);
+    if (!existingCourse) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    const rowsDeleted = await removeTeacherFromCourseService(
+      courseId,
+      teacherId
+    );
+
+    if (rowsDeleted === 0) {
+      return res
+        .status(404)
+        .json({ message: "Teacher is not assigned to this course" });
+    }
+
+    return res.status(200).json({
+      message: "Teacher removed from course",
+      courseId,
+      teacherId,
+    });
+  } catch (err) {
+    console.error("removeTeacherFromCourse error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// ========== TEACHER: Lấy list course mình dạy ==========
+
+// GET /api/teacher/courses
+export const getTeacherCourses = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || !isTeacher(user)) {
+      return res.status(403).json({ message: "Forbidden: Teacher only" });
+    }
+
+    const teacherId = getUserId(user);
+    if (!teacherId) {
+      return res
+        .status(401)
+        .json({ message: "Cannot determine user id from token" });
+    }
+
+    const courses = await getTeacherCoursesService(teacherId);
+    return res.status(200).json(courses);
+  } catch (err) {
+    console.error("getTeacherCourses error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// ========== LECTURES (Admin + Teacher) ==========
+
+// helper: check user có quyền quản lý nội dung course không
+const canManageCourseContent = async (user, course, userId) => {
+  if (!user || !course || !userId) return false;
+
+  // Admin luôn được phép
+  if (isAdmin(user)) return true;
+
+  // Teacher: được phép nếu là creator hoặc được gán trong course_teachers
+  if (isTeacher(user)) {
+    if (course.creatorId === userId) return true;
+
+    const isTeacherOfCourse = await isTeacherOfCourseService(
+      course.courseId || course.id,
+      userId
+    );
+    if (isTeacherOfCourse) return true;
+  }
+
+  return false;
+};
+
 // POST /api/admin/courses/:courseId/lectures
 export const createLecture = async (req, res) => {
   try {
@@ -239,10 +369,15 @@ export const createLecture = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    if (!isAdmin(user) && existingCourse.creatorId !== userId) {
-      return res
-        .status(403)
-        .json({ message: "Forbidden: chỉ creator hoặc Admin được thêm lecture" });
+    const allowed = await canManageCourseContent(
+      user,
+      existingCourse,
+      userId
+    );
+    if (!allowed) {
+      return res.status(403).json({
+        message: "Forbidden: chỉ Admin hoặc Teacher được gán vào course mới thêm lecture",
+      });
     }
 
     const lecture = await createLectureService(courseId, payload);
@@ -279,10 +414,15 @@ export const updateLecture = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    if (!isAdmin(user) && existingCourse.creatorId !== userId) {
-      return res
-        .status(403)
-        .json({ message: "Forbidden: chỉ creator hoặc Admin được sửa lecture" });
+    const allowed = await canManageCourseContent(
+      user,
+      existingCourse,
+      userId
+    );
+    if (!allowed) {
+      return res.status(403).json({
+        message: "Forbidden: chỉ Admin hoặc Teacher được gán vào course mới sửa lecture",
+      });
     }
 
     const lecture = await updateLectureService(courseId, lectureId, payload);
@@ -324,10 +464,15 @@ export const deleteLecture = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    if (!isAdmin(user) && existingCourse.creatorId !== userId) {
-      return res
-        .status(403)
-        .json({ message: "Forbidden: chỉ creator hoặc Admin được xoá lecture" });
+    const allowed = await canManageCourseContent(
+      user,
+      existingCourse,
+      userId
+    );
+    if (!allowed) {
+      return res.status(403).json({
+        message: "Forbidden: chỉ Admin hoặc Teacher được gán vào course mới xoá lecture",
+      });
     }
 
     const rowsDeleted = await deleteLectureService(courseId, lectureId);
