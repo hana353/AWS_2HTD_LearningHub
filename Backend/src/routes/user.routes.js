@@ -6,7 +6,8 @@ import {
   updateUser,
   deleteUser,
   adminCreateUser,
-  restoreUser
+  restoreUser,
+  getSoftDeletedUserList
 } from '../controllers/user.controller.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 import { requireRole } from '../middlewares/role.middleware.js';
@@ -52,5 +53,8 @@ router.delete('/admin/users/:id', authMiddleware, requireRole('Admin'), deleteUs
 
 //Restore user 
 router.patch('/admin/users/:id/restore', authMiddleware,requireRole('Admin'), restoreUser);
+
+//List User Soft Delete
+router.get('/admin/users/deleted', requireAdmin, getSoftDeletedUserList);
 
 export default router;

@@ -13,6 +13,9 @@ import {
   enrollCourse,
   updateLectureProgress,
   getMyCourses,
+  assignTeacherToCourse,
+  removeTeacherFromCourse,
+  getTeacherCourses,
 } from "../controllers/course.controller.js";
 
 import { authMiddleware } from "../middlewares/auth.middleware.js";
@@ -21,10 +24,10 @@ const router = Router();
 
 // =============== ADMIN / TEACHER ===============
 
-// Danh sách course (Admin: all, Teacher: của mình)
+// Danh sách course (Admin: all, Teacher: của mình tạo)
 router.get("/admin/courses", authMiddleware, getAdminCourses);
 
-// Tạo course
+// Tạo course (Admin / Teacher)
 router.post("/admin/courses", authMiddleware, createCourse);
 
 // Sửa course
@@ -32,6 +35,19 @@ router.patch("/admin/courses/:courseId", authMiddleware, updateCourse);
 
 // Xoá course
 router.delete("/admin/courses/:courseId", authMiddleware, deleteCourse);
+
+// Admin gán / bỏ gán Teacher cho course
+router.post(
+  "/admin/courses/:courseId/teachers",
+  authMiddleware,
+  assignTeacherToCourse
+);
+
+router.delete(
+  "/admin/courses/:courseId/teachers/:teacherId",
+  authMiddleware,
+  removeTeacherFromCourse
+);
 
 // Tạo lecture
 router.post(
@@ -53,6 +69,11 @@ router.delete(
   authMiddleware,
   deleteLecture
 );
+
+// =============== TEACHER ===============
+
+// Teacher lấy list course mình dạy (được gán)
+router.get("/teacher/courses", authMiddleware, getTeacherCourses);
 
 // =============== PUBLIC / MEMBER ===============
 
