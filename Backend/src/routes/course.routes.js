@@ -2,6 +2,7 @@
 import { Router } from "express";
 import {
   getAdminCourses,
+  getAdminCourseById,
   createCourse,
   updateCourse,
   deleteCourse,
@@ -27,6 +28,10 @@ const router = Router();
 
 // Danh sách course (Admin: all, Teacher: của mình tạo)
 router.get("/admin/courses", authMiddleware, getAdminCourses);
+
+// Chi tiết 1 course (Admin / Teacher)
+router.get("/admin/courses/:courseId", authMiddleware, getAdminCourseById
+);
 
 // Tạo course (Admin / Teacher)
 router.post("/admin/courses", authMiddleware, createCourse);
