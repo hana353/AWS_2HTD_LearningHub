@@ -350,7 +350,7 @@ export const createLectureService = async (courseId, payload) => {
       await createNotificationsForUsers({
         userIds,
         type: "NEW_LECTURE",
-        payloadBuilder: () => ({
+        payloadBuilder: (userId) => ({
           courseId,
           courseTitle,
           lectureId: lecture.lectureId,
@@ -361,6 +361,30 @@ export const createLectureService = async (courseId, payload) => {
   }
 
   return lecture;
+};
+
+// Lấy danh sách lectures của 1 course (cho Admin/Teacher quản lý nội dung)
+export const getCourseLecturesService = async (courseId) => {
+  const request = await getRequest();
+  request.input("CourseId", sql.UniqueIdentifier, courseId);
+
+  const result = await request.query(`
+    SELECT 
+      id AS lectureId,
+      course_id AS courseId,
+      title,
+      content_type AS contentType,
+      s3_key AS s3Key,
+      duration_seconds AS durationSeconds,
+      order_index AS orderIndex,
+      published,
+      created_at AS createdAt
+    FROM lectures
+    WHERE course_id = @CourseId
+    ORDER BY order_index ASC, created_at ASC;
+  `);
+
+  return result.recordset;
 };
 
 // Update lecture
