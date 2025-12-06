@@ -13,16 +13,38 @@ import {
   Languages,
   Tag,
   FileText,
+  MoreVertical,
+  Eye,
+  EyeOff,
+  Save,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { Formik, Form, Field, ErrorMessage, FieldArray } from 'formik';
-import { createPractice, getMyPractices } from '../../services/quizService';
+import {
+  createPractice,
+  getMyPractices,
+  updatePractice,
+  publishPractice,
+  deletePractice,
+  createPracticeCard,
+  getPracticeCards,
+  updatePracticeCard,
+  deletePracticeCard,
+} from '../../services/quizService';
 
 export default function TeacherQuiz() {
   const [practices, setPractices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingPractice, setEditingPractice] = useState(null);
+  const [isManagingCards, setIsManagingCards] = useState(false);
+  const [managingPracticeId, setManagingPracticeId] = useState(null);
+  const [practiceCards, setPracticeCards] = useState([]);
+  const [loadingCards, setLoadingCards] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     category: '',
@@ -82,8 +104,8 @@ export default function TeacherQuiz() {
     ],
   });
 
-  // Handle form submit
-  const handleSubmit = async (values, { setSubmitting, resetForm }) => {
+  // Handle create form submit
+  const handleCreateSubmit = async (values, { setSubmitting, resetForm }) => {
     try {
       // Validate cards
       const validCards = values.cards.filter(
@@ -120,6 +142,153 @@ export default function TeacherQuiz() {
       toast.error(err.message || 'Tạo bài tập thất bại.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Handle edit click
+  const handleEditClick = (practice) => {
+    setEditingPractice(practice);
+    setIsEditing(true);
+    setOpenMenuId(null);
+  };
+
+  // Handle edit form submit
+  const handleEditSubmit = async (values, { setSubmitting }) => {
+    try {
+      if (!editingPractice) return;
+
+      const payload = {
+        title: values.title.trim(),
+        description: values.description.trim(),
+        category: values.category,
+        topic: values.topic.trim(),
+        language: values.language,
+        published: values.published,
+      };
+
+      await updatePractice(editingPractice.id, payload);
+      toast.success('Cập nhật bài tập thành công!');
+      setIsEditing(false);
+      setEditingPractice(null);
+      fetchPractices();
+    } catch (err) {
+      toast.error(err.message || 'Cập nhật bài tập thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle delete
+  const handleDelete = async (practiceId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bài tập này? Hành động này không thể hoàn tác.')) {
+      return;
+    }
+
+    try {
+      await deletePractice(practiceId);
+      toast.success('Xóa bài tập thành công!');
+      setOpenMenuId(null);
+      fetchPractices();
+    } catch (err) {
+      toast.error(err.message || 'Xóa bài tập thất bại.');
+    }
+  };
+
+  // Handle publish/unpublish
+  const handlePublish = async (practice) => {
+    try {
+      const newPublishedStatus = !practice.published;
+      await publishPractice(practice.id || practice.practiceId, newPublishedStatus);
+      toast.success(newPublishedStatus ? 'Đã công khai bài tập!' : 'Đã ẩn bài tập!');
+      setOpenMenuId(null);
+      fetchPractices();
+    } catch (err) {
+      toast.error(err.message || 'Thay đổi trạng thái thất bại.');
+    }
+  };
+
+  // Handle manage cards
+  const handleManageCards = async (practice) => {
+    try {
+      setManagingPracticeId(practice.id || practice.practiceId);
+      setIsManagingCards(true);
+      setOpenMenuId(null);
+      await fetchPracticeCards(practice.id || practice.practiceId);
+    } catch (err) {
+      toast.error(err.message || 'Không thể tải danh sách thẻ.');
+    }
+  };
+
+  // Fetch practice cards
+  const fetchPracticeCards = async (practiceId) => {
+    setLoadingCards(true);
+    try {
+      const cards = await getPracticeCards(practiceId);
+      setPracticeCards(Array.isArray(cards) ? cards : []);
+    } catch (err) {
+      toast.error(err.message || 'Không thể tải danh sách thẻ.');
+      setPracticeCards([]);
+    } finally {
+      setLoadingCards(false);
+    }
+  };
+
+  // Handle create card
+  const handleCreateCard = async (values, { setSubmitting, resetForm }) => {
+    try {
+      if (!managingPracticeId) return;
+
+      const payload = {
+        front: values.front.trim(),
+        back: values.back.trim(),
+        example: values.example.trim() || '',
+        orderIndex: practiceCards.length,
+      };
+
+      await createPracticeCard(managingPracticeId, payload);
+      toast.success('Thêm thẻ thành công!');
+      resetForm();
+      await fetchPracticeCards(managingPracticeId);
+    } catch (err) {
+      toast.error(err.message || 'Thêm thẻ thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle update card
+  const handleUpdateCard = async (cardId, values) => {
+    try {
+      if (!managingPracticeId) return;
+
+      const payload = {
+        front: values.front.trim(),
+        back: values.back.trim(),
+        example: values.example.trim() || '',
+        orderIndex: values.orderIndex,
+      };
+
+      await updatePracticeCard(managingPracticeId, cardId, payload);
+      toast.success('Cập nhật thẻ thành công!');
+      await fetchPracticeCards(managingPracticeId);
+    } catch (err) {
+      toast.error(err.message || 'Cập nhật thẻ thất bại.');
+    }
+  };
+
+  // Handle delete card
+  const handleDeleteCard = async (cardId) => {
+    if (!window.confirm('Bạn có chắc muốn xóa thẻ này?')) {
+      return;
+    }
+
+    try {
+      if (!managingPracticeId) return;
+      await deletePracticeCard(managingPracticeId, cardId);
+      toast.success('Xóa thẻ thành công!');
+      await fetchPracticeCards(managingPracticeId);
+    } catch (err) {
+      toast.error(err.message || 'Xóa thẻ thất bại.');
     }
   };
 
@@ -254,58 +423,140 @@ export default function TeacherQuiz() {
           {filteredPractices.map((practice) => (
             <div
               key={practice.id || practice.practiceId}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-indigo-100 transition-all"
+              className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 hover:shadow-lg hover:border-indigo-100 transition-all relative flex flex-col h-full"
             >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="font-bold text-gray-900 text-base mb-2 line-clamp-2">
+              <div className="flex items-start justify-between mb-4 flex-shrink-0">
+                <div className="flex-1 min-w-0 pr-2">
+                  <h3 className="font-bold text-gray-900 text-base mb-2 line-clamp-2 min-h-[3rem]">
                     {practice.title}
                   </h3>
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
-                    {practice.description}
+                  <p className="text-sm text-gray-600 line-clamp-2 min-h-[2.5rem]">
+                    {practice.description || ' '}
                   </p>
                 </div>
-                <span
-                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ml-2 ${
-                    practice.published
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                      : 'bg-amber-50 text-amber-700 border-amber-100'
-                  }`}
-                >
-                  {practice.published ? (
-                    <>
-                      <CheckCircle size={13} />
-                      Công khai
-                    </>
-                  ) : (
-                    <>
-                      <XCircle size={13} />
-                      Nháp
-                    </>
-                  )}
-                </span>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap ${
+                      practice.published
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                    }`}
+                  >
+                    {practice.published ? (
+                      <>
+                        <CheckCircle size={13} />
+                        Công khai
+                      </>
+                    ) : (
+                      <>
+                        <XCircle size={13} />
+                        Nháp
+                      </>
+                    )}
+                  </span>
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(openMenuId === practice.id ? null : practice.id);
+                      }}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <MoreVertical size={18} className="text-gray-500" />
+                    </button>
+                    
+                    {openMenuId === practice.id && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-10" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                          }}
+                        ></div>
+                        <div className="absolute right-0 top-8 z-20 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[180px]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleManageCards(practice);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                          >
+                            <FileText size={16} />
+                            Quản lý thẻ
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditClick(practice);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                          >
+                            <Edit size={16} />
+                            Chỉnh sửa
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePublish(practice);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                          >
+                            {practice.published ? (
+                              <>
+                                <EyeOff size={16} />
+                                Ẩn bài tập
+                              </>
+                            ) : (
+                              <>
+                                <Eye size={16} />
+                                Công khai
+                              </>
+                            )}
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(practice.id || practice.practiceId);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors flex items-center gap-2"
+                          >
+                            <Trash2 size={16} />
+                            Xóa
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2 mb-4 flex-1 flex flex-col justify-end">
                 <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Tag size={14} />
+                  <Tag size={14} className="flex-shrink-0" />
                   <span className="font-medium">{practice.category}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <FileText size={14} />
+                  <FileText size={14} className="flex-shrink-0" />
                   <span>{practice.topic || 'Chưa có chủ đề'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <Languages size={14} />
+                  <Languages size={14} className="flex-shrink-0" />
                   <span>{practice.language?.toUpperCase() || 'EN'}</span>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-gray-100">
+              <div className="pt-4 border-t border-gray-100 flex-shrink-0">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">
                     {practice.cards?.length || 0} thẻ flashcard
                   </span>
+                  <button
+                    onClick={() => handleManageCards(practice)}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+                  >
+                    Xem thẻ
+                  </button>
                 </div>
               </div>
             </div>
@@ -337,7 +588,7 @@ export default function TeacherQuiz() {
 
             <Formik
               initialValues={getInitialValues()}
-              onSubmit={handleSubmit}
+              onSubmit={handleCreateSubmit}
               validate={(values) => {
                 const errors = {};
                 if (!values.title.trim()) {
@@ -594,7 +845,442 @@ export default function TeacherQuiz() {
           </div>
         </div>
       )}
+
+      {/* MODAL CHỈNH SỬA BÀI TẬP */}
+      {isEditing && editingPractice && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl my-8 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="font-semibold text-gray-900 text-lg">
+                  Chỉnh sửa bài tập
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Cập nhật thông tin bài tập flashcard
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  setEditingPractice(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <Formik
+              initialValues={{
+                title: editingPractice.title || '',
+                description: editingPractice.description || '',
+                category: editingPractice.category || 'vocabulary',
+                topic: editingPractice.topic || '',
+                language: editingPractice.language || 'en',
+                published: editingPractice.published || false,
+              }}
+              onSubmit={handleEditSubmit}
+              validate={(values) => {
+                const errors = {};
+                if (!values.title.trim()) {
+                  errors.title = 'Tiêu đề là bắt buộc';
+                }
+                if (!values.description.trim()) {
+                  errors.description = 'Mô tả là bắt buộc';
+                }
+                if (!values.topic.trim()) {
+                  errors.topic = 'Chủ đề là bắt buộc';
+                }
+                return errors;
+              }}
+            >
+              {({ isSubmitting }) => (
+                <Form className="px-6 py-5 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tiêu đề <span className="text-red-500">*</span>
+                    </label>
+                    <Field
+                      type="text"
+                      name="title"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    />
+                    <ErrorMessage
+                      name="title"
+                      component="div"
+                      className="text-red-500 text-xs mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mô tả <span className="text-red-500">*</span>
+                    </label>
+                    <Field
+                      as="textarea"
+                      name="description"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                    />
+                    <ErrorMessage
+                      name="description"
+                      component="div"
+                      className="text-red-500 text-xs mt-1"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Danh mục <span className="text-red-500">*</span>
+                      </label>
+                      <Field
+                        as="select"
+                        name="category"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      >
+                        <option value="vocabulary">Từ vựng</option>
+                        <option value="grammar">Ngữ pháp</option>
+                        <option value="pronunciation">Phát âm</option>
+                      </Field>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Chủ đề <span className="text-red-500">*</span>
+                      </label>
+                      <Field
+                        type="text"
+                        name="topic"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      />
+                      <ErrorMessage
+                        name="topic"
+                        component="div"
+                        className="text-red-500 text-xs mt-1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Ngôn ngữ <span className="text-red-500">*</span>
+                      </label>
+                      <Field
+                        as="select"
+                        name="language"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                      >
+                        <option value="en">Tiếng Anh</option>
+                        <option value="vi">Tiếng Việt</option>
+                      </Field>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Field
+                      name="published"
+                      type="checkbox"
+                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                    />
+                    <label className="text-sm text-gray-700">
+                      Công khai
+                    </label>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditingPractice(null);
+                      }}
+                      className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-5 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium shadow hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <Save size={16} />
+                      {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+                    </button>
+                  </div>
+                </Form>
+              )}
+            </Formik>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL QUẢN LÝ THẺ */}
+      {isManagingCards && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8 overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="font-semibold text-gray-900 text-lg">
+                  Quản lý thẻ Flashcard
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Thêm, chỉnh sửa hoặc xóa thẻ flashcard
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsManagingCards(false);
+                  setManagingPracticeId(null);
+                  setPracticeCards([]);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 max-h-[calc(100vh-200px)] overflow-y-auto">
+              {/* Form thêm thẻ mới */}
+              <div className="mb-6 p-4 bg-indigo-50 rounded-lg border border-indigo-100">
+                <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+                  <Plus size={18} className="text-indigo-600" />
+                  Thêm thẻ mới
+                </h4>
+                <Formik
+                  initialValues={{
+                    front: '',
+                    back: '',
+                    example: '',
+                  }}
+                  onSubmit={handleCreateCard}
+                  validate={(values) => {
+                    const errors = {};
+                    if (!values.front.trim()) {
+                      errors.front = 'Mặt trước là bắt buộc';
+                    }
+                    if (!values.back.trim()) {
+                      errors.back = 'Mặt sau là bắt buộc';
+                    }
+                    return errors;
+                  }}
+                >
+                  {({ isSubmitting, resetForm }) => (
+                    <Form className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Mặt trước <span className="text-red-500">*</span>
+                          </label>
+                          <Field
+                            type="text"
+                            name="front"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                            placeholder="VD: dog"
+                          />
+                          <ErrorMessage
+                            name="front"
+                            component="div"
+                            className="text-red-500 text-xs mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Mặt sau <span className="text-red-500">*</span>
+                          </label>
+                          <Field
+                            type="text"
+                            name="back"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                            placeholder="VD: con chó"
+                          />
+                          <ErrorMessage
+                            name="back"
+                            component="div"
+                            className="text-red-500 text-xs mt-1"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-gray-600 mb-1">
+                            Ví dụ (Tùy chọn)
+                          </label>
+                          <Field
+                            type="text"
+                            name="example"
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+                            placeholder="VD: I have a dog."
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={isSubmitting}
+                          className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                          <Plus size={16} />
+                          {isSubmitting ? 'Đang thêm...' : 'Thêm thẻ'}
+                        </button>
+                      </div>
+                    </Form>
+                  )}
+                </Formik>
+              </div>
+
+              {/* Danh sách thẻ */}
+              <div>
+                <h4 className="font-medium text-gray-900 mb-3">
+                  Danh sách thẻ ({practiceCards.length})
+                </h4>
+                {loadingCards ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <Clock className="animate-spin mx-auto mb-2" size={24} />
+                    <p>Đang tải...</p>
+                  </div>
+                ) : practiceCards.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-lg">
+                    <FileText size={32} className="mx-auto mb-2 text-gray-300" />
+                    <p>Chưa có thẻ nào</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {practiceCards.map((card, index) => (
+                      <CardItem
+                        key={card.id || card.cardId}
+                        card={card}
+                        index={index}
+                        onUpdate={handleUpdateCard}
+                        onDelete={handleDeleteCard}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+// Component Card Item với chức năng edit inline
+function CardItem({ card, index, onUpdate, onDelete }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    front: card.front || '',
+    back: card.back || '',
+    example: card.example || '',
+    orderIndex: card.orderIndex || index,
+  });
+
+  const handleSave = () => {
+    onUpdate(card.id || card.cardId, formData);
+    setIsEditing(false);
+  };
+
+  const handleCancel = () => {
+    setFormData({
+      front: card.front || '',
+      back: card.back || '',
+      example: card.example || '',
+      orderIndex: card.orderIndex || index,
+    });
+    setIsEditing(false);
+  };
+
+  if (isEditing) {
+    return (
+      <div className="p-4 border-2 border-indigo-200 rounded-lg bg-indigo-50">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-medium text-indigo-700">
+            Thẻ #{index + 1} - Đang chỉnh sửa
+          </span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Mặt trước</label>
+            <input
+              type="text"
+              value={formData.front}
+              onChange={(e) => setFormData({ ...formData, front: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Mặt sau</label>
+            <input
+              type="text"
+              value={formData.back}
+              onChange={(e) => setFormData({ ...formData, back: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-600 mb-1">Ví dụ</label>
+            <input
+              type="text"
+              value={formData.example}
+              onChange={(e) => setFormData({ ...formData, example: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={handleCancel}
+            className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+          >
+            Hủy
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 flex items-center gap-2"
+          >
+            <Save size={14} />
+            Lưu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-4 border border-gray-200 rounded-lg bg-white hover:border-indigo-200 transition-colors">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-medium text-gray-600">
+          Thẻ #{index + 1}
+        </span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsEditing(true)}
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+          >
+            <Edit size={16} />
+          </button>
+          <button
+            onClick={() => onDelete(card.id || card.cardId)}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Mặt trước</label>
+          <p className="text-sm font-medium text-gray-900">{card.front || '-'}</p>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Mặt sau</label>
+          <p className="text-sm font-medium text-gray-900">{card.back || '-'}</p>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Ví dụ</label>
+          <p className="text-sm text-gray-600">{card.example || '-'}</p>
+        </div>
+      </div>
+    </div>
+  );
+}

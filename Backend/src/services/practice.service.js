@@ -25,13 +25,22 @@ function httpError(status, message) {
 // ===== QUIZ (PRACTICE SET) =====
 
 export async function createPracticeSetService(user, payload) {
-  // Chỉ tạo quiz, KHÔNG tạo cards kèm theo nữa
-  const set = await createPracticeSet(user.id, {
-    ...payload
-  });
+  // Tách cards ra khỏi payload để tạo practice set
+  const { cards, ...setData } = payload;
+  
+  // Tạo practice set
+  const set = await createPracticeSet(user.localUserId, setData);
 
-  // Luồng mới: luôn tạo quiz trước, sau đó dùng API cards để thêm card
-  return { ...set, cards: [] };
+  // Nếu có cards trong payload, tạo chúng
+  const createdCards = [];
+  if (cards && Array.isArray(cards) && cards.length > 0) {
+    for (const cardData of cards) {
+      const card = await createPracticeCard(set.id, cardData);
+      createdCards.push(card);
+    }
+  }
+
+  return { ...set, cards: createdCards };
 }
 
 export async function updatePracticeSetService(user, setId, payload) {
@@ -39,7 +48,7 @@ export async function updatePracticeSetService(user, setId, payload) {
   if (!set) throw httpError(404, 'Practice set not found');
 
   const isAdmin = user.roleName === 'Admin';
-  if (!isAdmin && set.owner_id !== user.id) {
+  if (!isAdmin && set.owner_id !== user.localUserId) {
     throw httpError(403, 'Not allowed to edit this practice set');
   }
 
@@ -57,7 +66,7 @@ export async function deletePracticeSetService(user, setId) {
   if (!set) throw httpError(404, 'Practice set not found');
 
   const isAdmin = user.roleName === 'Admin';
-  if (!isAdmin && set.owner_id !== user.id) {
+  if (!isAdmin && set.owner_id !== user.localUserId) {
     throw httpError(403, 'Not allowed to delete this practice set');
   }
 
@@ -69,7 +78,7 @@ export async function publishPracticeSetService(user, setId, published) {
   if (!set) throw httpError(404, 'Practice set not found');
 
   const isAdmin = user.roleName === 'Admin';
-  if (!isAdmin && set.owner_id !== user.id) {
+  if (!isAdmin && set.owner_id !== user.localUserId) {
     throw httpError(403, 'Not allowed to publish this practice set');
   }
 
@@ -83,7 +92,7 @@ export async function publishPracticeSetService(user, setId, published) {
 }
 
 export async function listMyPracticeSetsService(user, filters) {
-  return listMyPracticeSets(user.id, filters);
+  return listMyPracticeSets(user.localUserId, filters);
 }
 
 export async function listPublishedPracticeSetsService(filters) {
@@ -96,7 +105,7 @@ export async function getPracticeSetDetailService(user, setId) {
 
   const isAdmin = user.roleName === 'Admin';
   const isOwner =
-    String(set.owner_id).toLowerCase() === String(user.id).toLowerCase();
+    String(set.owner_id).toLowerCase() === String(user.localUserId).toLowerCase();
 
   // Member hoặc người ngoài chỉ xem được khi quiz đã publish
   if (!set.published && !isAdmin && !isOwner) {
@@ -113,7 +122,7 @@ export async function getTeacherPracticeSetDetailService(user, setId) {
 
   const isAdmin = user.roleName === 'Admin';
   const isOwner =
-    String(set.owner_id).toLowerCase() === String(user.id).toLowerCase();
+    String(set.owner_id).toLowerCase() === String(user.localUserId).toLowerCase();
 
   // Giáo viên chỉ xem được quiz của mình (hoặc Admin xem tất cả)
   if (!isAdmin && !isOwner) {
@@ -131,7 +140,7 @@ export async function addCardToPracticeSetService(user, setId, payload) {
   if (!set) throw httpError(404, 'Practice set not found');
 
   const isAdmin = user.roleName === 'Admin';
-  if (!isAdmin && set.owner_id !== user.id) {
+  if (!isAdmin && set.owner_id !== user.localUserId) {
     throw httpError(403, 'Not allowed to modify cards');
   }
 
@@ -148,7 +157,7 @@ export async function updatePracticeCardService(
   if (!set) throw httpError(404, 'Practice set not found');
 
   const isAdmin = user.roleName === 'Admin';
-  if (!isAdmin && set.owner_id !== user.id) {
+  if (!isAdmin && set.owner_id !== user.localUserId) {
     throw httpError(403, 'Not allowed to modify cards');
   }
 
@@ -160,7 +169,7 @@ export async function deletePracticeCardService(user, setId, cardId) {
   if (!set) throw httpError(404, 'Practice set not found');
 
   const isAdmin = user.roleName === 'Admin';
-  if (!isAdmin && set.owner_id !== user.id) {
+  if (!isAdmin && set.owner_id !== user.localUserId) {
     throw httpError(403, 'Not allowed to delete cards');
   }
 
@@ -173,7 +182,7 @@ export async function listPracticeCardsInSetService(user, setId) {
 
   const isAdmin = user.roleName === 'Admin';
   const isOwner =
-    String(set.owner_id).toLowerCase() === String(user.id).toLowerCase();
+    String(set.owner_id).toLowerCase() === String(user.localUserId).toLowerCase();
 
   if (!isAdmin && !isOwner) {
     throw httpError(403, 'Not allowed to view cards in this set');
@@ -189,7 +198,7 @@ export async function getPracticeCardDetailService(user, setId, cardId) {
 
   const isAdmin = user.roleName === 'Admin';
   const isOwner =
-    String(set.owner_id).toLowerCase() === String(user.id).toLowerCase();
+    String(set.owner_id).toLowerCase() === String(user.localUserId).toLowerCase();
 
   if (!isAdmin && !isOwner && !set.published) {
     throw httpError(403, 'Not allowed to view this card');
@@ -214,7 +223,7 @@ export async function getStudyCardsService(user, setId, limit) {
     throw httpError(404, 'Practice set not available');
   }
 
-  const cards = await getDuePracticeCardsForUser(setId, user.id, limit || 20);
+  const cards = await getDuePracticeCardsForUser(setId, user.localUserId, limit || 20);
   return cards;
 }
 
@@ -256,7 +265,7 @@ export async function reviewPracticeCardService(user, setId, cardId, quality) {
   }
 
   const update = calcNextReview(null, quality);
-  await upsertPracticeCardProgress(user.id, cardId, update);
+  await upsertPracticeCardProgress(user.localUserId, cardId, update);
 
   return { ok: true, nextReviewAt: update.nextReviewAt };
 }
