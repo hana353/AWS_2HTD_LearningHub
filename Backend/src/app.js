@@ -11,6 +11,7 @@ import userRoutes from "./routes/user.routes.js";
 import practiceRoutes from './routes/practice.routes.js';
 import courseRoutes from "./routes/course.routes.js";
 import notificationRoutes from './routes/notification.routes.js';
+import uploadRoutes from './routes/upload.routes.js';
 import { errorHandler } from "./middlewares/error.middleware.js";
 
 dotenv.config();
@@ -43,6 +44,9 @@ app.use("/api", courseRoutes);
 
 //Notification
 app.use('/api/notifications', notificationRoutes);
+
+//Upload
+app.use('/api/upload', uploadRoutes);
 
 // Error handler (để cuối cùng)
 app.use(errorHandler);

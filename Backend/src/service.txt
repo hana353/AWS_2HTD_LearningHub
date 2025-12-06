@@ -1,0 +1,89 @@
+S3
+Name: learninghub-app-bucket
+Access key: AKIA2VGKO3F4F3JHPJ53
+Secret access key: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
+AWS Region: Asia Pacific (Singapore) ap-southeast-1
+--------
+
+Lambda
+Funtion name: learninghub-backend
+Function ARN: arn:aws:lambda:ap-southeast-1:732716521848:function:learninghub-backend
+--------
+API Gateway: learninghub-backend-API
+API endpoint: https://wu256wsp4j.execute-api.apsoutheast-1.amazonaws.com/default/{proxy+}
+API type: REST
+Authorization: NONE
+isComplexStatement: No
+Method: ANY
+Resource path: /{proxy+}
+Service principal: apigateway.amazonaws.com
+Stage: default
+Statement ID: 7832f8ac-b858-58ad-b96d-ffedfc92ef03
+CloudWatch log role ARN: arn:aws:iam::732716521848:role/APIGatewayCloudWatchLogsRole
+--------
+
+VPC 
+name: learninghub-vpc
+VPC ID: vpc-0dcc30db69a11c12e
+Main network ACL: acl-0806755d4ba6acfa0
+Main route table: rtb-0bd95c21efde1a4eb
+-------
+Internet gateways
+Internet gateway ID: igw-0ed8361982e51ac07
+
+Route tables
+Name: learninghub-public-rt
+Route table ID: rtb-00f9624ae45cfcce0
+VPC: vpc-0dcc30db69a11c12e | learninghub-vpc
+Routes: 
+Destination: 10.0.0.0/16
+Target:local
+Destination: 0.0.0.0/0
+Target:igw-0ed8361982e51ac07
+
+Name: public-subnet-a
+Subnet ID: subnet-0b740655e8
+IPv4 CIDR: 10.0.1.0/24
+
+Name: public-subnet-b
+Subnet ID: subnet-0f51697f9eff06da7
+IPv4 CIDR: 10.0.2.0/24
+
+-------
+NAT gateway
+NAT gateway ID: nat-0e3ad63d595b960ad
+NAT gateway ARN: arn:aws:ec2:ap-southeast-1:732716521848:natgateway/nat-0e3ad63d595b960ad
+Primary public IPv4 address: 13.228.2.110
+Primary private IPv4 address: 10.0.1.56
+
+Route tables
+Name: learninghub-private-rt
+Route table ID: rtb-00f9624ae45cfcce0
+VPC: vpc-0dcc30db69a11c12e | learninghub-vpc
+Routes: 
+Destination: 10.0.0.0/16
+Target:local
+Destination: 0.0.0.0/0
+Target:nat-0e3ad63d595b960ad
+
+Name: private-subnet-a
+Subnet ID: subnet-0da5bd89eef6eb4b7
+IPv4 CIDR: 10.0.3.0/24
+
+Name: private-subnet-b
+Subnet ID: subnet-02aca0be4986ca281
+IPv4 CIDR: 10.0.4.0/24
+
+--------
+EC2
+DB_SERVER: 52.74.234.40
+DB_USER: sa
+DB_PASSWORD: 2htdLearningHub@
+DB_NAME=2HTD_LearningHub
+
+--------
+Cognito
+
+User pool ID: ap-southeast-1_wgFLpZsho 
+Client ID: 4quhrr2mrl5t2u4fatc4pdl44s
+---------
