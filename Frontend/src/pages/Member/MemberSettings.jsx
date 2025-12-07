@@ -6,6 +6,7 @@ import {
 import { uploadAvatar } from '../../services/uploadService';
 import { useAuth } from '../../contexts/AuthContext';
 import { getMyProfile, updateMyProfile } from '../../services/profileService';
+import { forgotPassword, resetPassword } from '../../services/authService';
 
 export default function MemberSettings() {
     // --- STATE ---
@@ -25,12 +26,14 @@ export default function MemberSettings() {
         avatar: null
     });
 
-    // State đổi mật khẩu
+    // State đổi mật khẩu (luồng quên mật khẩu)
     const [passData, setPassData] = useState({
-        currentPassword: '',
+        step: 'request', // 'request' | 'verify' - Bước 1: gửi code, Bước 2: nhập code + mật khẩu mới
+        code: '',
         newPassword: '',
         confirmPassword: ''
     });
+    const [codeSent, setCodeSent] = useState(false);
 
     // Load thông tin user từ API
     useEffect(() => {
@@ -149,11 +152,43 @@ export default function MemberSettings() {
         }
     };
 
-    const handleSavePassword = async () => {
+    // Bước 1: Gửi mã code về email
+    const handleRequestPasswordReset = async () => {
+        if (!formData.email) {
+            showNotify('error', 'Email không tồn tại');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            await forgotPassword(formData.email);
+            setCodeSent(true);
+            setPassData({ ...passData, step: 'verify' });
+            showNotify('success', 'Mã xác thực đã được gửi về email của bạn!');
+        } catch (error) {
+            showNotify('error', error.message || 'Không thể gửi mã xác thực');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Bước 2: Xác nhận code và đặt mật khẩu mới
+    const handleResetPassword = async () => {
+        if (!passData.code) {
+            showNotify('error', 'Vui lòng nhập mã xác thực');
+            return;
+        }
+
+        if (!passData.newPassword) {
+            showNotify('error', 'Vui lòng nhập mật khẩu mới');
+            return;
+        }
+
         if (passData.newPassword !== passData.confirmPassword) {
             showNotify('error', 'Mật khẩu xác nhận không khớp!');
             return;
         }
+
         if (passData.newPassword.length < 6) {
             showNotify('error', 'Mật khẩu mới phải có ít nhất 6 ký tự.');
             return;
@@ -161,15 +196,25 @@ export default function MemberSettings() {
 
         setIsLoading(true);
         try {
-            // TODO: Gọi API để đổi mật khẩu
-            // await changePassword(passData.currentPassword, passData.newPassword);
-            setPassData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+            await resetPassword({
+                email: formData.email,
+                code: passData.code,
+                newPassword: passData.newPassword
+            });
+            
+            setPassData({ step: 'request', code: '', newPassword: '', confirmPassword: '' });
+            setCodeSent(false);
             showNotify('success', 'Đổi mật khẩu thành công!');
         } catch (error) {
             showNotify('error', error.message || 'Đổi mật khẩu thất bại');
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleCancelPasswordReset = () => {
+        setPassData({ step: 'request', code: '', newPassword: '', confirmPassword: '' });
+        setCodeSent(false);
     };
 
     const showNotify = (type, message) => {
@@ -320,20 +365,6 @@ export default function MemberSettings() {
                                         className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
                                     />
                                 </div>
-                                
-                                <div className="space-y-2 md:col-span-2">
-                                    <label className="text-sm font-semibold text-gray-600 flex items-center gap-1.5">
-                                        <User size={14}/> Giới thiệu
-                                    </label>
-                                    <textarea 
-                                        name="bio"
-                                        value={formData.bio} 
-                                        onChange={handleProfileChange}
-                                        rows="3"
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition resize-none"
-                                        placeholder="Nhập giới thiệu về bản thân..."
-                                    />
-                                </div>
                             </div>
 
                             <div className="mt-8 pt-6 border-t border-gray-100 flex justify-end">
@@ -357,56 +388,94 @@ export default function MemberSettings() {
                                 <Lock className="text-[#5a4d8c]" size={20} /> Đổi mật khẩu
                             </h2>
 
-                            <div className="max-w-md space-y-5">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-600">Mật khẩu hiện tại</label>
-                                    <div className="relative">
+                            {passData.step === 'request' ? (
+                                // Bước 1: Gửi mã code về email
+                                <div className="max-w-md space-y-5">
+                                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+                                        <p className="text-sm text-blue-800">
+                                            <strong>Lưu ý:</strong> Chúng tôi sẽ gửi mã xác thực về email <strong>{formData.email}</strong> của bạn. 
+                                            Vui lòng kiểm tra hộp thư và nhập mã để đặt mật khẩu mới.
+                                        </p>
+                                    </div>
+
+                                    <div className="pt-4">
+                                        <button 
+                                            onClick={handleRequestPasswordReset}
+                                            disabled={isLoading || !formData.email}
+                                            className="w-full px-6 py-2.5 bg-[#5a4d8c] text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-[#483d73] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isLoading ? 'Đang gửi...' : 'Gửi mã xác thực về email'}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                // Bước 2: Nhập code + mật khẩu mới
+                                <div className="max-w-md space-y-5">
+                                    {codeSent && (
+                                        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+                                            <p className="text-sm text-green-800">
+                                                <strong>✓ Mã xác thực đã được gửi!</strong> Vui lòng kiểm tra email <strong>{formData.email}</strong> và nhập mã bên dưới.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-600">Mã xác thực</label>
+                                        <input 
+                                            type="text" 
+                                            name="code"
+                                            value={passData.code}
+                                            onChange={handlePassChange}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
+                                            placeholder="Nhập mã 6 chữ số"
+                                            maxLength={6}
+                                        />
+                                        <p className="text-xs text-gray-400">Mã xác thực được gửi về email của bạn</p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-600">Mật khẩu mới</label>
                                         <input 
                                             type="password" 
-                                            name="currentPassword"
-                                            value={passData.currentPassword}
+                                            name="newPassword"
+                                            value={passData.newPassword}
                                             onChange={handlePassChange}
-                                            className="w-full pl-4 pr-10 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
+                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
+                                            placeholder="••••••••"
+                                        />
+                                        <p className="text-xs text-gray-400">Tối thiểu 6 ký tự</p>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-600">Xác nhận mật khẩu mới</label>
+                                        <input 
+                                            type="password" 
+                                            name="confirmPassword"
+                                            value={passData.confirmPassword}
+                                            onChange={handlePassChange}
+                                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
                                             placeholder="••••••••"
                                         />
                                     </div>
-                                </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-600">Mật khẩu mới</label>
-                                    <input 
-                                        type="password" 
-                                        name="newPassword"
-                                        value={passData.newPassword}
-                                        onChange={handlePassChange}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
-                                        placeholder="••••••••"
-                                    />
-                                    <p className="text-xs text-gray-400">Tối thiểu 6 ký tự</p>
+                                    <div className="pt-4 flex gap-3">
+                                        <button 
+                                            onClick={handleCancelPasswordReset}
+                                            disabled={isLoading}
+                                            className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-50 transition-all disabled:opacity-50"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button 
+                                            onClick={handleResetPassword}
+                                            disabled={isLoading}
+                                            className="flex-1 px-6 py-2.5 bg-[#5a4d8c] text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-[#483d73] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                                        >
+                                            {isLoading ? 'Đang xử lý...' : 'Đặt mật khẩu mới'}
+                                        </button>
+                                    </div>
                                 </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-gray-600">Xác nhận mật khẩu mới</label>
-                                    <input 
-                                        type="password" 
-                                        name="confirmPassword"
-                                        value={passData.confirmPassword}
-                                        onChange={handlePassChange}
-                                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:border-[#5a4d8c] focus:ring-2 focus:ring-indigo-100 outline-none text-sm transition"
-                                        placeholder="••••••••"
-                                    />
-                                </div>
-
-                                <div className="pt-4">
-                                    <button 
-                                        onClick={handleSavePassword}
-                                        disabled={isLoading}
-                                        className="w-full px-6 py-2.5 bg-[#5a4d8c] text-white rounded-xl font-bold text-sm shadow-lg shadow-indigo-200 hover:bg-[#483d73] transition-all flex items-center justify-center gap-2"
-                                    >
-                                        {isLoading ? 'Đang xử lý...' : 'Cập nhật mật khẩu'}
-                                    </button>
-                                </div>
-                            </div>
+                            )}
                         </div>
                     )}
                 </div>

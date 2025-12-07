@@ -49,3 +49,47 @@ export async function register({ fullName, email, phone, password }) {
         throw error; // Ném lỗi về phía trên để xử lý
     }
 }
+
+/**
+ * Gửi mã quên mật khẩu về email
+ * @param {string} email - Email của user
+ * @returns {Promise<void>}
+ */
+export async function forgotPassword(email) {
+    try {
+        const res = await apiClient.post("/api/auth/forgot-password", { email });
+        const result = res.data;
+
+        if (!result.success) {
+            throw new Error(result.message || "Failed to send forgot password code");
+        }
+
+        return result;
+    } catch (error) {
+        throw error;
+    }
+}
+
+/**
+ * Xác nhận code và đặt mật khẩu mới
+ * @param {Object} payload - { email, code, newPassword }
+ * @returns {Promise<void>}
+ */
+export async function resetPassword({ email, code, newPassword }) {
+    try {
+        const res = await apiClient.post("/api/auth/reset-password", {
+            email,
+            code,
+            newPassword
+        });
+        const result = res.data;
+
+        if (!result.success) {
+            throw new Error(result.message || "Failed to reset password");
+        }
+
+        return result;
+    } catch (error) {
+        throw error;
+    }
+}
