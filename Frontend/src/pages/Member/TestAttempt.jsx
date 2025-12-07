@@ -16,6 +16,7 @@ export default function TestAttempt() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
+  const [serverErrors, setServerErrors] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -25,9 +26,21 @@ export default function TestAttempt() {
       try {
         const data = await startExam(examId);
         if (!mounted) return;
-        setSubmissionId(data.submissionId || data.submissionID || null);
-        setExam(data.exam || null);
+        const submission = data.submissionId || data.submissionID || null;
+        const examObj = data.exam || null;
+        setSubmissionId(submission);
+        setExam(examObj);
         setSecondsLeft(data.durationSeconds ?? null);
+        // optional: store started/expires
+        // initialize empty answers object keyed by stable question id (question_id preferred)
+        if (examObj && Array.isArray(examObj.questions)) {
+          const init = {};
+          examObj.questions.forEach(q => {
+            const key = q.question_id ?? q.exam_question_id ?? q.questionId ?? q.id;
+            if (key) init[key] = [];
+          });
+          setAnswers(init);
+        }
       } catch (err) {
         setError(err.message || String(err));
       } finally {
@@ -88,15 +101,31 @@ export default function TestAttempt() {
     setSubmitting(true);
     setSubmissionResult(null);
     try {
-      const payload = Object.entries(answers).map(([qId, choiceIdxs]) => ({ questionId: qId, choices: choiceIdxs }));
+      // Backend expects each answer item to use `answer` (single value or array)
+      // instead of `choices`. Convert local answers map to that shape.
+      const payload = Object.entries(answers).map(([qId, choiceIdxs]) => {
+        // normalize to either single value or array depending on length
+        const answerValue = Array.isArray(choiceIdxs)
+          ? (choiceIdxs.length === 1 ? choiceIdxs[0] : choiceIdxs)
+          : choiceIdxs;
+        return { questionId: qId, answer: answerValue };
+      });
       const res = await submitExam(submissionId, payload);
       // res expected: { submissionId, totalScore, result: {...} }
+      // ensure we store returned submissionId and the full result object
+      if (res && res.submissionId) setSubmissionId(res.submissionId);
       setSubmissionResult(res || null);
       setSubmitted(true);
     } catch (err) {
       console.error('Submit error', err);
       setSubmissionResult(null);
-      setError(err.message || String(err));
+      // Prefer structured server message if available
+      const srv = err?.response?.data || err?.data || null;
+      const msg = srv?.message || srv?.error || err.message || String(err);
+      setError(msg);
+      // store validation details for display
+      setServerErrors(srv?.errors ?? srv ?? null);
+      if (srv?.errors) console.debug('Validation errors from server:', srv.errors);
     } finally {
       setSubmitting(false);
     }
@@ -110,7 +139,17 @@ export default function TestAttempt() {
   }, [secondsLeft, submitted, submitting]);
 
   if (loading) return <div className="p-6">Đang khởi tạo bài thi...</div>;
-  if (error) return <div className="p-6 text-red-500">Lỗi: {error}</div>;
+  if (error) return (
+    <div className="p-6 text-red-500">
+      <div>Lỗi: {error}</div>
+      {serverErrors && (
+        <div className="mt-3 bg-white p-3 rounded border text-sm text-gray-700">
+          <div className="font-semibold mb-1">Chi tiết lỗi từ server:</div>
+          <pre className="whitespace-pre-wrap">{JSON.stringify(serverErrors, null, 2)}</pre>
+        </div>
+      )}
+    </div>
+  );
   if (!exam) return <div className="p-6">Không tìm thấy đề thi.</div>;
 
   return (
@@ -127,35 +166,38 @@ export default function TestAttempt() {
       </div>
 
       <div className="space-y-6">
-        {Array.isArray(exam.questions) && exam.questions.map((q, idx) => (
-          <div key={q.question_id || q.exam_question_id || idx} className="bg-white p-4 rounded-xl border">
-            <div className="mb-2 flex items-start justify-between">
-              <div>
-                <div className="text-sm text-gray-500">Câu {idx + 1} • {q.points ?? ''} điểm</div>
-                <div className="font-semibold mt-1">{q.title}</div>
-                {q.body && <div className="text-sm text-gray-600 mt-1">{q.body}</div>}
+        {Array.isArray(exam.questions) && exam.questions.map((q, idx) => {
+          const qKey = q.question_id ?? q.exam_question_id ?? q.questionId ?? q.id ?? `q-${idx}`;
+          return (
+            <div key={qKey} className="bg-white p-4 rounded-xl border">
+              <div className="mb-2 flex items-start justify-between">
+                <div>
+                  <div className="text-sm text-gray-500">Câu {q.sequence ?? idx + 1} • {q.points ?? q.points ?? ''} điểm</div>
+                  <div className="font-semibold mt-1">{q.title}</div>
+                  {q.body && <div className="text-sm text-gray-600 mt-1">{q.body}</div>}
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {Array.isArray(q.choices) && q.choices.map((c, ci) => {
+                  const selected = answers[qKey] ? answers[qKey].includes(ci) : false;
+                  return (
+                    <label key={ci} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${selected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-gray-50'}`}>
+                      <input
+                        type={q.type === 'single_choice' ? 'radio' : 'checkbox'}
+                        name={`q-${qKey}`}
+                        checked={selected}
+                        onChange={() => handleSelect(qKey, ci, q.type)}
+                        className="form-radio text-indigo-600"
+                      />
+                      <div className="text-sm">{c.text}</div>
+                    </label>
+                  );
+                })}
               </div>
             </div>
-
-            <div className="mt-3 space-y-2">
-              {Array.isArray(q.choices) && q.choices.map((c, ci) => {
-                const selected = answers[q.question_id] ? answers[q.question_id].includes(ci) : false;
-                return (
-                  <label key={ci} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${selected ? 'bg-indigo-50 border border-indigo-100' : 'hover:bg-gray-50'}`}>
-                    <input
-                      type={q.type === 'single_choice' ? 'radio' : 'checkbox'}
-                      name={`q-${q.question_id}`}
-                      checked={selected}
-                      onChange={() => handleSelect(q.question_id, ci, q.type)}
-                      className="form-radio text-indigo-600"
-                    />
-                    <div className="text-sm">{c.text}</div>
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="mt-6 flex justify-end">
         {!submitted ? (
@@ -181,6 +223,9 @@ export default function TestAttempt() {
 
             <div className="mt-4 flex justify-end gap-2">
               <button onClick={() => navigate('/member/test')} className="px-4 py-2 border rounded-lg">Quay lại danh sách</button>
+              {submissionResult?.submissionId && (
+                <button onClick={() => navigate(`/member/submission/${submissionResult.submissionId}`)} className="px-4 py-2 bg-[#8c78ec] text-white rounded-lg">Xem chi tiết</button>
+              )}
             </div>
           </div>
         )}

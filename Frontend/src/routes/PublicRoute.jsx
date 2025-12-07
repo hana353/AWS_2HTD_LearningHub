@@ -23,6 +23,8 @@ import TestAttempt from "../pages/Member/TestAttempt";
 import TestReview from "../pages/Member/TestReview";
 import MemberNotifications from "../pages/Member/MemberNotifications";
 import MemberSettings from "../pages/Member/MemberSettings";
+import MemberPractices from "../pages/Member/MemberPractices";
+import MemberPracticeDetail from "../pages/Member/MemberPracticeDetail";
 //Teacher
 import TeacherDashboard from "../pages/Teacher/TeacherDashboard";
 import TeacherClasses from "../pages/Teacher/TeacherClasses";
@@ -72,6 +74,8 @@ const routes = createBrowserRouter([
             { index: true, element: <MemberDashboard /> },
               { path: "courses", element: <Courses /> },
                             { path: "test", element: <MemberTests /> },
+                            { path: "practices", element: <MemberPractices /> },
+                            { path: "practice/:id", element: <MemberPracticeDetail /> },
                             { path: "test/:id", element: <TestAttempt /> },
                             { path: "submission/:id", element: <TestReview /> },
       { path: "notifications", element: <MemberNotifications /> },

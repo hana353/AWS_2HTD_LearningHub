@@ -91,7 +91,23 @@ export default function MemberTests() {
         }
     };
 
-    const filteredTests = filter === 'all' ? tests : tests.filter(t => t.status === filter);
+    // Build lookup of submissions by examId
+    const submissionsByExam = (submissions || []).reduce((acc, s) => {
+        if (!s || !s.examId) return acc;
+        if (!acc[s.examId]) acc[s.examId] = [];
+        acc[s.examId].push(s);
+        return acc;
+    }, {});
+
+    let filteredTests = tests;
+    if (filter === 'unattempted') {
+        filteredTests = tests.filter(t => !submissionsByExam[t.id]);
+    } else if (filter === 'all') {
+        filteredTests = tests;
+    } else {
+        // for 'history' and 'scored' we won't show tests grid
+        filteredTests = [];
+    }
 
     return (
         <div className="w-full space-y-8 pb-10">
@@ -126,9 +142,9 @@ export default function MemberTests() {
                 <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 flex gap-1">
                     {[
                         { key: 'all', label: 'Tất cả' },
-                        { key: 'pending', label: 'Sắp tới' },
-                        { key: 'completed', label: 'Đã có điểm' },
-                        { key: 'overdue', label: 'Quá hạn' }
+                        { key: 'history', label: 'Lịch sử' },
+                        { key: 'unattempted', label: 'Bài chưa làm' },
+                        { key: 'scored', label: 'Đã có điểm' }
                     ].map(tab => (
                         <button
                             key={tab.key}
@@ -147,11 +163,12 @@ export default function MemberTests() {
             {/* 3. TEST GRID */}
             {loading && <div className="text-center py-8">Đang tải danh sách bài kiểm tra...</div>}
             {error && <div className="text-center py-8 text-red-500">Lỗi tải: {error}</div>}
+            {filter !== 'history' && filter !== 'scored' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredTests.map((test) => (
                     <div
                         key={test.id}
-                        className="group bg-white rounded-3xl p-6 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 transition-all duration-300 flex flex-col relative"
+                        className="group bg-gradient-to-br from-[#fbf7ff] to-[#f6eefc] rounded-3xl p-6 border border-purple-100 shadow-sm hover:shadow-xl hover:shadow-purple-100/50 transition-all duration-300 flex flex-col relative"
                     >
                         {/* Status Badge */}
                         <div className="flex justify-between items-start mb-4">
@@ -220,53 +237,55 @@ export default function MemberTests() {
                                             : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                                     }`}
                             >
-                                {test.status === 'available' ? 'Làm bài' : 'Xem'}
+                                {'Xem chi tiết'}
                                 {test.status === 'available' && <ArrowRight size={16} />}
                             </button>
                         </div>
                     </div>
                 ))}
             </div>
+            )}
 
-            {/* 4. SUBMISSIONS HISTORY */}
-            <div className="mt-8">
-                <h2 className="text-xl font-bold mb-4">Lịch sử bài làm</h2>
-                {subLoading && <div className="text-sm text-gray-500">Đang tải lịch sử...</div>}
-                {subError && <div className="text-sm text-red-500">Lỗi tải lịch sử: {subError}</div>}
+            {/* 4. SUBMISSIONS HISTORY (shows when filter is all/history/scored) */}
+            {(filter === 'history' || filter === 'scored' || filter === 'all') && (
+                <div className="mt-8">
+                    <h2 className="text-xl font-bold mb-4">Lịch sử bài làm</h2>
+                    {subLoading && <div className="text-sm text-gray-500">Đang tải lịch sử...</div>}
+                    {subError && <div className="text-sm text-red-500">Lỗi tải lịch sử: {subError}</div>}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {submissions.map((s) => (
-                        <div key={s.submissionId} className="bg-white p-4 rounded-xl border shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <div className="text-sm text-gray-500">{s.examTitle}</div>
-                                    <div className="font-bold">{s.totalScore ?? '-'} điểm</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {(() => {
+                            const list = filter === 'scored' ? submissions.filter(s => s.submittedAt) : submissions;
+                            if (!list || list.length === 0) return <div className="text-sm text-gray-500">Không có lịch sử phù hợp.</div>;
+                            return list.map((s) => (
+                                <div key={s.submissionId} className="bg-gradient-to-br from-[#fbf7ff] to-[#f6eefc] p-4 rounded-xl border border-purple-100 shadow-sm">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <div className="text-sm text-gray-500">{s.examTitle}</div>
+                                            <div className="font-bold">{s.totalScore ?? '-'} điểm</div>
+                                        </div>
+                                        <div className="text-xs text-gray-400">{s.status}</div>
+                                    </div>
+                                    <div className="text-xs text-gray-500 mb-3">
+                                        <div>Bắt đầu: {s.startedAt ? new Date(s.startedAt).toLocaleString() : '-'}</div>
+                                        <div>Nộp: {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '-'}</div>
+                                    </div>
+                                    <div className="flex justify-end gap-2">
+                                        {s.status === 'in_progress' ? (
+                                            <button onClick={() => navigate(`/member/test/${s.examId}?submissionId=${s.submissionId}`)} className="px-3 py-2 bg-[#8c78ec] text-white rounded-lg">Tiếp tục</button>
+                                        ) : (
+                                            <button onClick={() => navigate(`/member/submission/${s.submissionId}`)} className="px-3 py-2 border rounded-lg">Xem kết quả</button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="text-xs text-gray-400">
-                                    {s.status}
-                                </div>
-                            </div>
-                            <div className="text-xs text-gray-500 mb-3">
-                                <div>Bắt đầu: {s.startedAt ? new Date(s.startedAt).toLocaleString() : '-'}</div>
-                                <div>Nộp: {s.submittedAt ? new Date(s.submittedAt).toLocaleString() : '-'}</div>
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                {s.status === 'in_progress' ? (
-                                    <button onClick={() => navigate(`/member/test/${s.examId}`)} className="px-3 py-2 bg-[#8c78ec] text-white rounded-lg">Tiếp tục</button>
-                                ) : (
-                                    <button onClick={() => navigate(`/member/submission/${s.submissionId}`)} className="px-3 py-2 border rounded-lg">Xem kết quả</button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                    {submissions.length === 0 && !subLoading && (
-                        <div className="text-sm text-gray-500">Bạn chưa có bài nộp nào.</div>
-                    )}
+                            ));
+                        })()}
+                    </div>
                 </div>
-            </div>
+            )}
 
-            {/* Empty State */}
-            {filteredTests.length === 0 && (
+            {/* Empty State (only for test grid views) */}
+            {filter !== 'history' && filter !== 'scored' && filteredTests.length === 0 && (
                 <div className="text-center py-16">
                     <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
                         <ClipboardList size={32} />

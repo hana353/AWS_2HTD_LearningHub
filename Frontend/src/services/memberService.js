@@ -66,8 +66,52 @@ export async function getSubmissionReview(submissionId) {
   }
 }
 
+// Fetch practice quizzes (public)
+export async function getPractices() {
+  try {
+    const res = await apiClient.get('/api/practices');
+    // Expected: { success: true, data: [ ... ] } or array directly
+    const body = res.data;
+    if (body && Array.isArray(body.data)) return body.data;
+    if (Array.isArray(body)) return body;
+    return [];
+  } catch (err) {
+    throw err;
+  }
+}
+
+// Fetch single practice/deck by id
+export async function getPracticeById(practiceId) {
+  try {
+    const res = await apiClient.get(`/api/practices/${practiceId}`);
+    // Expected: { success: true, data: { ...deck } }
+    const body = res.data;
+    if (body && body.data) return body.data;
+    return body;
+  } catch (err) {
+    throw err;
+  }
+}
+
+// Fetch study cards for a practice set (flashcard view)
+export async function getPracticeStudy(practiceId, limit = 10) {
+  try {
+    const res = await apiClient.get(`/api/practices/${practiceId}/study?limit=${limit}`);
+    // Expected: { success: true, data: [ cards... ] }
+    const body = res.data;
+    if (body && Array.isArray(body.data)) return body.data;
+    if (Array.isArray(body)) return body;
+    return [];
+  } catch (err) {
+    throw err;
+  }
+}
+
 // add to default export for convenience
 export default {
   getPublicExams,
   getSubmissionReview,
+  getPractices,
+  getPracticeById,
+  getPracticeStudy,
 };
