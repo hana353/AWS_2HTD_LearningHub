@@ -11,7 +11,9 @@ export async function createQuestion({
   type,
   choicesJson,
   difficulty,
-  tagsJson
+  tagsJson,
+  imageS3Key,   
+  audioS3Key    
 }) {
   await poolConnect;
   const request = pool.request();
@@ -23,11 +25,33 @@ export async function createQuestion({
   request.input('choices', sql.NVarChar(sql.MAX), choicesJson || null);
   request.input('difficulty', sql.SmallInt, difficulty ?? null);
   request.input('tags', sql.NVarChar(sql.MAX), tagsJson || null);
+  request.input('image_s3_key', sql.NVarChar(sql.MAX), imageS3Key || null);
+  request.input('audio_s3_key', sql.NVarChar(sql.MAX), audioS3Key || null);
 
   const result = await request.query(`
-    INSERT INTO questions (author_id, title, body, type, choices, difficulty, tags)
+    INSERT INTO questions (
+      author_id,
+      title,
+      body,
+      type,
+      choices,
+      difficulty,
+      tags,
+      image_s3_key,
+      audio_s3_key
+    )
     OUTPUT inserted.*
-    VALUES (@author_id, @title, @body, @type, @choices, @difficulty, @tags);
+    VALUES (
+      @author_id,
+      @title,
+      @body,
+      @type,
+      @choices,
+      @difficulty,
+      @tags,
+      @image_s3_key,
+      @audio_s3_key
+    );
   `);
 
   return result.recordset[0];
@@ -61,6 +85,8 @@ export async function getQuestionsByAuthor({
       q.choices,
       q.difficulty,
       q.tags,
+      q.image_s3_key, 
+      q.audio_s3_key, 
       q.created_at,
       q.updated_at
     FROM questions q
@@ -103,17 +129,11 @@ export async function updateQuestionById(id, payload) {
   request.input('title', sql.NVarChar(255), payload.title || null);
   request.input('body', sql.NVarChar(sql.MAX), payload.body || null);
   request.input('type', sql.NVarChar(20), payload.type);
-  request.input(
-    'choices',
-    sql.NVarChar(sql.MAX),
-    payload.choicesJson || null
-  );
-  request.input(
-    'difficulty',
-    sql.SmallInt,
-    payload.difficulty ?? null
-  );
+  request.input('choices', sql.NVarChar(sql.MAX), payload.choicesJson || null);
+  request.input('difficulty', sql.SmallInt, payload.difficulty ?? null);
   request.input('tags', sql.NVarChar(sql.MAX), payload.tagsJson || null);
+  request.input('image_s3_key', sql.NVarChar(sql.MAX), payload.imageS3Key || null);
+  request.input('audio_s3_key', sql.NVarChar(sql.MAX), payload.audioS3Key || null);
 
   const result = await request.query(`
     UPDATE questions
@@ -124,6 +144,8 @@ export async function updateQuestionById(id, payload) {
       choices = @choices,
       difficulty = @difficulty,
       tags = @tags,
+      image_s3_key = @image_s3_key, 
+      audio_s3_key = @audio_s3_key, 
       updated_at = SYSDATETIMEOFFSET()
     OUTPUT inserted.*
     WHERE id = @id;
