@@ -1,6 +1,7 @@
 // src/services/test.service.js
 // Logic cho module bài kiểm tra
-
+// S3 service
+import { uploadFileToS3 } from './s3.service.js';
 import {
   createQuestion,
   getQuestionsByAuthor,
@@ -27,13 +28,11 @@ import {
   getSubmissionWithDetails
 } from '../models/submission.model.js';
 
-// ====== THÊM MỚI CHO NOTIFICATION ======
 import {
   createNotification,
   createNotificationsForUsers
 } from './notification.service.js';
 import { sql, getPool } from '../config/db.js';
-// =======================================
 
 // ============================
 // Helper chung
@@ -50,6 +49,65 @@ function parseExamQuestions(exam) {
   }));
 
   return exam;
+}
+
+// ============================
+// Helper upload media cho câu hỏi
+// ============================
+
+// Chuyển base64 (hoặc data URL) -> Buffer
+function base64ToBuffer(dataUrlOrBase64) {
+  if (!dataUrlOrBase64) return null;
+
+  const base64 = dataUrlOrBase64.includes('base64,')
+    ? dataUrlOrBase64.split('base64,')[1]
+    : dataUrlOrBase64;
+
+  return Buffer.from(base64, 'base64');
+}
+
+/**
+ * imageFile / audioFile dự kiến dạng:
+ * {
+ *   base64: 'data:image/png;base64,...' hoặc chỉ chuỗi base64,
+ *   filename: 'q1.png',
+ *   contentType: 'image/png'
+ * }
+ */
+async function uploadQuestionMedia({
+  imageFile,
+  audioFile,
+  existingImageKey = null,
+  existingAudioKey = null
+}) {
+  let imageS3Key = existingImageKey || null;
+  let audioS3Key = existingAudioKey || null;
+
+  // Ảnh câu hỏi
+  if (imageFile?.base64) {
+    const buffer = base64ToBuffer(imageFile.base64);
+    const { key } = await uploadFileToS3(
+      buffer,
+      'questions/images', // prefix trong S3
+      imageFile.filename || 'question-image',
+      imageFile.contentType || 'image/png'
+    );
+    imageS3Key = key;
+  }
+
+  // Audio câu hỏi
+  if (audioFile?.base64) {
+    const buffer = base64ToBuffer(audioFile.base64);
+    const { key } = await uploadFileToS3(
+      buffer,
+      'questions/audios',
+      audioFile.filename || 'question-audio',
+      audioFile.contentType || 'audio/mpeg'
+    );
+    audioS3Key = key;
+  }
+
+  return { imageS3Key, audioS3Key };
 }
 
 // Map 1 dòng exam_questions + questions thành object trả cho FE
@@ -72,11 +130,12 @@ function mapExamQuestionRow(q) {
     difficulty: q.difficulty,
     choices,
     tags,
+    imageS3Key: q.image_s3_key || null, // NEW
+    audioS3Key: q.audio_s3_key || null, // NEW
     points: Number(q.points ?? 1),
     sequence: q.sequence
   };
 }
-
 
 // Build response chung cho các API về câu hỏi trong đề thi
 function buildExamQuestionsResponse(exam, questionList = []) {
@@ -102,11 +161,28 @@ function buildExamQuestionsResponse(exam, questionList = []) {
 
 // Tạo câu hỏi cho giáo viên
 export async function createTeacherQuestion(teacherId, payload) {
-  const { title, body, type, choices, difficulty, tags } = payload;
+  const {
+    title,
+    body,
+    type,
+    choices,
+    difficulty,
+    tags,
+    imageFile, // NEW
+    audioFile  // NEW
+  } = payload;
 
+  // 1. Upload media lên S3
+  const { imageS3Key, audioS3Key } = await uploadQuestionMedia({
+    imageFile,
+    audioFile
+  });
+
+  // 2. Serialize choices/tags
   const choicesJson = choices ? JSON.stringify(choices) : null;
   const tagsJson = tags ? JSON.stringify(tags) : null;
 
+  // 3. Tạo question, lưu luôn S3 key (bạn nhớ đã thêm 2 cột image_s3_key, audio_s3_key trong DB nhé)
   const question = await createQuestion({
     authorId: teacherId,
     title,
@@ -114,9 +190,12 @@ export async function createTeacherQuestion(teacherId, payload) {
     type,
     choicesJson,
     difficulty,
-    tagsJson
+    tagsJson,
+    imageS3Key,   // NEW
+    audioS3Key    // NEW
   });
 
+  // 4. Parse lại choices/tags cho FE như cũ
   if (question.choices) {
     question.choices = JSON.parse(question.choices);
   }
@@ -177,18 +256,34 @@ export async function getTeacherQuestionDetail(teacherId, questionId) {
 
 // Cập nhật câu hỏi (bank)
 export async function updateTeacherQuestion(teacherId, questionId, payload) {
-  // Check quyền + tồn tại
-  await getTeacherQuestionDetail(teacherId, questionId);
+  // Lấy câu hỏi hiện tại & check quyền
+  const existing = await getTeacherQuestionDetail(teacherId, questionId);
 
-  const choicesJson = payload.choices
-    ? JSON.stringify(payload.choices)
-    : null;
-  const tagsJson = payload.tags ? JSON.stringify(payload.tags) : null;
+  const {
+    choices,
+    tags,
+    imageFile, // NEW
+    audioFile, // NEW
+    ...rest
+  } = payload;
+
+  const choicesJson = choices ? JSON.stringify(choices) : null;
+  const tagsJson = tags ? JSON.stringify(tags) : null;
+
+  // Upload media mới (nếu có), nếu không giữ key cũ
+  const { imageS3Key, audioS3Key } = await uploadQuestionMedia({
+    imageFile,
+    audioFile,
+    existingImageKey: existing.image_s3_key,
+    existingAudioKey: existing.audio_s3_key
+  });
 
   const updated = await updateQuestionById(questionId, {
-    ...payload,
+    ...rest,
     choicesJson,
-    tagsJson
+    tagsJson,
+    imageS3Key,
+    audioS3Key
   });
 
   if (!updated) {
@@ -308,7 +403,9 @@ export async function listQuestionsInExam(teacherId, examId) {
       q.type,
       q.difficulty,
       q.choices,
-      q.tags
+      q.tags,
+      q.image_s3_key,
+      q.audio_s3_key  
     FROM exam_questions eq
     JOIN questions q ON q.id = eq.question_id
     WHERE eq.exam_id = @exam_id
@@ -341,7 +438,9 @@ export async function getQuestionInExamDetail(teacherId, examId, questionId) {
       q.type,
       q.difficulty,
       q.choices,
-      q.tags
+      q.tags,
+      q.image_s3_key, 
+      q.audio_s3_key  
     FROM exam_questions eq
     JOIN questions q ON q.id = eq.question_id
     WHERE eq.exam_id = @exam_id
