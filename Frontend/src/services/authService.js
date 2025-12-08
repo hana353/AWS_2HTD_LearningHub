@@ -29,13 +29,14 @@ export async function login({ email, password }) {
 }
 
 // Register
-export async function register({ fullName, email, phone, password }) {
+export async function register({ fullName, email, phone, password, role }) {
     try {
         const res = await apiClient.post("/api/auth/register", {
             fullName,
             email,
-            phone, // Đảm bảo có tham số phone
-            password
+            phone,
+            password,
+            role: role || 'member' // Mặc định là member nếu không có
         });
         const result = res.data;
 
@@ -86,6 +87,49 @@ export async function resetPassword({ email, code, newPassword }) {
 
         if (!result.success) {
             throw new Error(result.message || "Failed to reset password");
+        }
+
+        return result;
+    } catch (error) {
+        throw error;
+    }
+}
+
+/**
+ * Xác thực email bằng mã code
+ * @param {Object} payload - { email, code }
+ * @returns {Promise<void>}
+ */
+export async function confirmEmail({ email, code }) {
+    try {
+        const res = await apiClient.post("/api/auth/confirm-email", {
+            email,
+            code
+        });
+        const result = res.data;
+
+        if (!result.success) {
+            throw new Error(result.message || "Failed to confirm email");
+        }
+
+        return result;
+    } catch (error) {
+        throw error;
+    }
+}
+
+/**
+ * Gửi lại mã xác thực email
+ * @param {string} email - Email của user
+ * @returns {Promise<void>}
+ */
+export async function resendConfirmCode(email) {
+    try {
+        const res = await apiClient.post("/api/auth/resend-confirm-code", { email });
+        const result = res.data;
+
+        if (!result.success) {
+            throw new Error(result.message || "Failed to resend confirmation code");
         }
 
         return result;

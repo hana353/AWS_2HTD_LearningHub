@@ -391,6 +391,7 @@ export default function AdminUsers() {
                     onChange={(e) => { setFilterRole(e.target.value); setPage(1); setPageDeleted(1); }}
                 >
                     <option value="all">Tất cả role</option>
+                    <option value="admin">Admin</option>
                     <option value="teacher">Teacher</option>
                     <option value="member">Member</option>
                 </select>

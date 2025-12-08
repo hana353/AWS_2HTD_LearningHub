@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { register } from '../services/authService'; // Nhập hàm register
+import VerifyEmail from '../components/VerifyEmail';
 
 // --- Icons Components ---
 const EyeIcon = (props) => (
@@ -25,6 +26,9 @@ const hoverBg = 'hover:bg-[#7a66d3]';
 const lightestBg = 'bg-[#f8f6fb]';
 
 export default function RegisterPage() {
+    const navigate = useNavigate();
+    const [showVerifyEmail, setShowVerifyEmail] = useState(false);
+    const [registeredEmail, setRegisteredEmail] = useState('');
 
     const [formData, setFormData] = useState({
         fullName: '',
@@ -32,8 +36,6 @@ export default function RegisterPage() {
         email: '',
         password: '',
         confirmPassword: '',
-        birthDate: '',
-        occupation: 'student',
         role: 'member',
     });
 
@@ -59,20 +61,37 @@ export default function RegisterPage() {
             const response = await register({
                 fullName: formData.fullName,
                 email: formData.email,
-                phoneNumber: formData.phone,
+                phone: formData.phone,
                 password: formData.password,
+                role: formData.role,
             });
 
             // Xử lý phản hồi sau khi đăng ký
             console.log("Đăng ký thành công:", response);
-            alert("Đăng ký thành công!");
-
-            // Tùy chọn: chuyển hướng đến trang đăng nhập
+            // Hiển thị màn hình xác thực email
+            setRegisteredEmail(formData.email);
+            setShowVerifyEmail(true);
         } catch (error) {
             console.error(error.message); // Xử lý lỗi
             alert("Đăng ký thất bại: " + error.message);
         }
     };
+
+    // Nếu đang hiển thị màn hình xác thực email
+    if (showVerifyEmail) {
+        return (
+            <VerifyEmail
+                email={registeredEmail}
+                onSuccess={() => {
+                    alert("Xác thực email thành công! Bạn có thể đăng nhập ngay bây giờ.");
+                    navigate('/auth/login');
+                }}
+                onCancel={() => {
+                    setShowVerifyEmail(false);
+                }}
+            />
+        );
+    }
 
     return (
         <div className={`min-h-screen flex items-center justify-center p-4 ${lightestBg}`}>
@@ -138,36 +157,6 @@ export default function RegisterPage() {
                                 className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
                                 placeholder="name@example.com"
                             />
-                        </div>
-
-                        {/* Row 3 */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Ngày sinh</label>
-                                <input
-                                    type="date"
-                                    name="birthDate"
-                                    required
-                                    value={formData.birthDate}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nghề nghiệp</label>
-                                <select
-                                    name="occupation"
-                                    value={formData.occupation}
-                                    onChange={handleChange}
-                                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 bg-gray-50"
-                                >
-                                    <option value="student">Học sinh</option>
-                                    <option value="college_student">Sinh viên</option>
-                                    <option value="worker">Đi làm</option>
-                                    <option value="lecturer">Giảng viên</option>
-                                    <option value="other">Khác</option>
-                                </select>
-                            </div>
                         </div>
 
                         {/* Row: ROLE CHỌN LOẠI TÀI KHOẢN */}

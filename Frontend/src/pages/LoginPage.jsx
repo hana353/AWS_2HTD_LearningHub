@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { login } from '../services/authService'; 
+import { login } from '../services/authService';
+import VerifyEmail from '../components/VerifyEmail'; 
 
 
 // --- ICONS & ASSETS (Giữ nguyên phần export) ---
@@ -45,6 +46,9 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [showVerifyEmail, setShowVerifyEmail] = useState(false);
+    const [userEmail, setUserEmail] = useState('');
+    const [savedPassword, setSavedPassword] = useState(''); // Lưu password tạm để đăng nhập lại sau verify
     const navigate = useNavigate();
 
     const handleLogin = async (e) => {
@@ -53,6 +57,15 @@ export default function LoginPage() {
             const response = await login({ email, password });
             const { token, user } = response;
     
+            // Kiểm tra email đã được verify chưa
+            if (!user.email_verified) {
+                // Hiển thị màn hình xác thực email
+                setUserEmail(user.email);
+                setSavedPassword(password); // Lưu password tạm để đăng nhập lại sau verify
+                setShowVerifyEmail(true);
+                return;
+            }
+
             // Lưu thông tin vào localStorage
             localStorage.setItem('token', token);
             localStorage.setItem('role', user.role_name); // Lưu vai trò vào localStorage
@@ -72,8 +85,52 @@ export default function LoginPage() {
         }
     };
 
-    return (
-        <div className={`min-h-screen flex items-center justify-center p-4 ${lightestBg}`}>
+    const handleVerifySuccess = async () => {
+        // Sau khi verify thành công, đăng nhập lại với password đã lưu
+        try {
+            const response = await login({ email: userEmail, password: savedPassword });
+            const { token, user } = response;
+            
+            localStorage.setItem('token', token);
+            localStorage.setItem('role', user.role_name);
+            localStorage.setItem('roleId', user.role_id);
+            
+            let path = '/member';
+            if (user.role_name === 'Admin') {
+                path = '/admin';
+            } else if (user.role_name === 'Teacher') {
+                path = '/teacher';
+            }
+            
+            // Xóa password đã lưu
+            setSavedPassword('');
+            navigate(path);
+        } catch (error) {
+            console.error(error.message);
+            alert("Đăng nhập thất bại: " + error.message);
+            // Nếu đăng nhập thất bại, quay lại form đăng nhập
+            setShowVerifyEmail(false);
+            setPassword('');
+        }
+    };
+
+    // Nếu đang hiển thị màn hình xác thực email
+    if (showVerifyEmail) {
+        return (
+            <VerifyEmail
+                email={userEmail}
+                onSuccess={handleVerifySuccess}
+                onCancel={() => {
+                    setShowVerifyEmail(false);
+                    setPassword(''); // Reset password
+                    setSavedPassword(''); // Xóa password đã lưu
+                }}
+            />
+        );
+    }
+
+    return (
+        <div className={`min-h-screen flex items-center justify-center p-4 ${lightestBg}`}>
             
             {/* Nút Quay Lại Trang Chủ - FIXED ở góc trên trái */}
             <Link 
@@ -114,23 +171,28 @@ export default function LoginPage() {
                                 <label className="block text-sm font-medium text-gray-700">Mật khẩu</label>
                                 <a href="#" className={`text-xs font-semibold ${primaryText} hover:underline`}>Quên mật khẩu?</a>
                             </div>
-                            <div className="relative">
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent transition outline-none bg-gray-50 focus:bg-white"
-                                    placeholder="••••••••"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
-                                <button
-                                    type="button"
-                                    className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-400 hover:text-gray-600"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                >
-                                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
-                                </button>
-                            </div>
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 focus:ring-2 focus:ring-purple-400 focus:border-transparent transition outline-none bg-gray-50 focus:bg-white"
+                                    placeholder="••••••••"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    required
+                                />
+                                <button
+                                    type="button"
+                                    className="absolute inset-y-0 right-0 flex items-center justify-center w-12 text-gray-400 hover:text-gray-600 focus:outline-none z-10"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                                >
+                                    {showPassword ? (
+                                        <EyeOffIcon key="eye-off" className="w-5 h-5" />
+                                    ) : (
+                                        <EyeIcon key="eye-on" className="w-5 h-5" />
+                                    )}
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex items-center">
