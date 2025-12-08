@@ -7,7 +7,7 @@ import React, {
   } from "react";
   import { useNavigate } from "react-router-dom";
   import { Calendar, Clock, Search, ArrowRight, Loader2 } from "lucide-react";
-  import { getPublishedCourses, enrollCourse } from "../../services/memberService";
+  import { getMyCourses } from "../../services/memberService";
   
   const PLACEHOLDER_IMAGES = [
     "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1000&auto=format&fit=crop",
@@ -48,23 +48,19 @@ import React, {
   };
   
   const mapCourse = (course) => {
-    const rawPrice =
-      typeof course?.price === "number"
-        ? course.price
-        : Number(course?.price ?? NaN);
-    const price = Number.isFinite(rawPrice) ? rawPrice : null;
-    const publishedAt = course?.publishedAt || course?.createdAt || null;
+    const enrolledAt = course?.enrolledAt || null;
+    const progressPercent = course?.progressPercent ?? 0;
+    const status = course?.status || null;
     
     return {
       id: course?.courseId || course?.id || "",
       slug: course?.slug || "",
       title: course?.title || "Khóa học chưa đặt tên",
       shortDescription: course?.shortDescription || "",
-      price,
-      currency: course?.currency || "VND",
-      publishedAt,
-      publishedDate: formatDate(publishedAt),
-      isFree: price === 0 || price === null,
+      enrolledAt,
+      enrolledDate: formatDate(enrolledAt),
+      progressPercent: Number.isFinite(Number(progressPercent)) ? Number(progressPercent) : 0,
+      status,
       image: PLACEHOLDER_IMAGES[hashToIndex(course?.courseId || course?.id || "")],
       hasRoute: Boolean(course?.courseId || course?.id),
     };
@@ -76,7 +72,6 @@ import React, {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [searchTerm, setSearchTerm] = useState("");
-    const [joinStatus, setJoinStatus] = useState({});
 
     const isMountedRef = useRef(true);
 
@@ -91,7 +86,7 @@ import React, {
       setLoading(true);
       setError(null);
       try {
-        const data = await getPublishedCourses();
+        const data = await getMyCourses();
         if (!isMountedRef.current) return;
         const mapped = (Array.isArray(data) ? data : []).map(mapCourse);
         setCourses(mapped);
@@ -118,48 +113,15 @@ import React, {
       [navigate]
     );
 
-    const handleJoinCourse = useCallback(async (courseId) => {
-      if (!courseId) return;
-
-      setJoinStatus((prev) => ({
-        ...prev,
-        [courseId]: {
-          loading: true,
-          success: prev[courseId]?.success ?? false,
-          error: null,
-        },
-      }));
-
-      try {
-        await enrollCourse(courseId);
-        setJoinStatus((prev) => ({
-          ...prev,
-          [courseId]: {
-            loading: false,
-            success: true,
-            error: null,
-          },
-        }));
-        // Refresh courses after joining
-        fetchCourses();
-      } catch (err) {
-        setJoinStatus((prev) => ({
-          ...prev,
-          [courseId]: {
-            loading: false,
-            success: false,
-            error: err?.message || "Đăng ký khóa học thất bại. Vui lòng thử lại.",
-          },
-        }));
-      }
-    }, [fetchCourses]);
-
     const totalCourses = courses.length;
-    const freeCount = useMemo(
-      () => courses.filter((course) => course.isFree).length,
+    const completedCount = useMemo(
+      () => courses.filter((course) => course.progressPercent >= 100).length,
       [courses]
     );
-    const paidCount = totalCourses - freeCount;
+    const inProgressCount = useMemo(
+      () => courses.filter((course) => course.progressPercent > 0 && course.progressPercent < 100).length,
+      [courses]
+    );
 
     const filteredCourses = useMemo(() => {
       const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -184,10 +146,10 @@ import React, {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
             <div>
               <h1 className="text-3xl font-extrabold text-[#5a4d8c] mb-2">
-                Tất cả khóa học
+                Khóa học của tôi
               </h1>
               <p className="text-gray-600 max-w-lg">
-                Khám phá các khóa học được tạo bởi admin. Tham gia ngay để bắt đầu hành trình học tập của bạn.
+                Danh sách các khóa học bạn đã tham gia. Tiếp tục học tập để hoàn thành khóa học của bạn.
               </p>
             </div>
 
@@ -202,18 +164,18 @@ import React, {
               </div>
               <div className="px-4 py-2 text-center border-r border-gray-200">
                 <div className="text-emerald-600 font-bold text-xl">
-                  {freeCount}
+                  {completedCount}
                 </div>
                 <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                  Miễn phí
+                  Hoàn thành
                 </div>
               </div>
               <div className="px-4 py-2 text-center">
                 <div className="text-indigo-600 font-bold text-xl">
-                  {paidCount}
+                  {inProgressCount}
                 </div>
                 <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                  Có phí
+                  Đang học
                 </div>
               </div>
             </div>
@@ -266,10 +228,7 @@ import React, {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {filteredCourses.map((course) => {
                   const cardKey = course.id || course.title;
-                  const joinState = joinStatus[course.id] || {};
-                  const isJoining = Boolean(joinState.loading);
-                  const isJoined = Boolean(joinState.success);
-                  const joinError = joinState.error;
+                  const isCompleted = course.progressPercent >= 100;
 
                   return (
                     <div
@@ -282,14 +241,12 @@ import React, {
                         </span>
                         <span
                           className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                            course.isFree
+                            isCompleted
                               ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                              : "bg-purple-50 text-purple-600 border border-purple-100"
+                              : "bg-blue-50 text-blue-600 border border-blue-100"
                           }`}
                         >
-                          {course.isFree
-                            ? "Miễn phí"
-                            : formatCurrency(course.price, course.currency)}
+                          {isCompleted ? "Hoàn thành" : `${Math.round(course.progressPercent)}%`}
                         </span>
                       </div>
 
@@ -314,50 +271,42 @@ import React, {
                             "Chưa có mô tả cho khóa học này."}
                         </p>
 
-                        <div className="flex items-center justify-between text-xs text-gray-400 mb-5 border-t border-gray-100 pt-4">
-                          <div className="flex items-center gap-1">
-                            <Calendar size={14} className="text-[#8c78ec]" />
-                            {course.publishedDate}
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                            <span>Tiến độ học tập</span>
+                            <span className="font-semibold">{Math.round(course.progressPercent)}%</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Clock size={14} className="text-[#8c78ec]" />
-                            Phát hành
+                          <div className="w-full bg-gray-200 rounded-full h-2.5">
+                            <div
+                              className={`h-2.5 rounded-full transition-all duration-500 ${
+                                isCompleted
+                                  ? "bg-emerald-500"
+                                  : "bg-[#8c78ec]"
+                              }`}
+                              style={{ width: `${Math.min(100, Math.max(0, course.progressPercent))}%` }}
+                            ></div>
                           </div>
                         </div>
 
-                        <div className="mt-auto space-y-2">
-                          <button
-                            onClick={() => handleJoinCourse(course.id)}
-                            disabled={isJoining || isJoined}
-                            className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2 transition-all duration-300 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-emerald-500"
-                          >
-                            {isJoining ? (
-                              <>
-                                <Loader2 size={16} className="animate-spin" />
-                                Đang tham gia...
-                              </>
-                            ) : isJoined ? (
-                              "Đã tham gia"
-                            ) : (
-                              "Tham gia khóa học"
-                            )}
-                          </button>
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-5 border-t border-gray-100 pt-4">
+                          <div className="flex items-center gap-1">
+                            <Calendar size={14} className="text-[#8c78ec]" />
+                            {course.enrolledDate}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Clock size={14} className="text-[#8c78ec]" />
+                            Đã tham gia
+                          </div>
+                        </div>
+
+                        <div className="mt-auto">
                           <button
                             onClick={() => handleOpenCourse(course.id)}
-                            disabled={isJoining}
-                            className="w-full py-3 rounded-xl bg-[#8c78ec] text-white font-semibold hover:bg-[#7a66d3] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="w-full py-3 rounded-xl bg-[#8c78ec] text-white font-semibold hover:bg-[#7a66d3] transition-all duration-300 flex items-center justify-center gap-2"
                           >
-                            Xem chi tiết
+                            {isCompleted ? "Xem lại khóa học" : "Tiếp tục học"}
                             <ArrowRight size={16} />
                           </button>
-                          {joinError && (
-                            <p className="text-xs text-red-500 text-center">{joinError}</p>
-                          )}
-                          {isJoined && !joinError && (
-                            <p className="text-xs text-emerald-600 text-center">
-                              Bạn đã đăng ký khóa học này.
-                            </p>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -366,7 +315,7 @@ import React, {
               </div>
             )}
   
-            {!error && filteredCourses.length === 0 && (
+            {!error && filteredCourses.length === 0 && searchTerm && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-4">
                   <Search size={40} className="text-gray-300" />
@@ -375,7 +324,7 @@ import React, {
                   Không tìm thấy kết quả
                 </h3>
                 <p className="text-gray-500 mb-6">
-                  Thử thay đổi bộ lọc hoặc tìm kiếm từ khóa khác.
+                  Thử thay đổi từ khóa tìm kiếm.
                 </p>
                 <button
                   onClick={() => {
@@ -383,7 +332,29 @@ import React, {
                   }}
                   className="px-8 py-3 bg-[#8c78ec] text-white rounded-xl font-bold hover:bg-[#7a66d3] transition shadow-lg"
                 >
-                  Xem tất cả khóa học
+                  Xóa bộ lọc
+                </button>
+              </div>
+            )}
+
+            {!error && !loading && filteredCourses.length === 0 && !searchTerm && (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                  <Search size={40} className="text-gray-300" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  Chưa có khóa học
+                </h3>
+                <p className="text-gray-500 mb-6">
+                  Bạn chưa tham gia khóa học nào. Hãy khám phá các khóa học có sẵn.
+                </p>
+                <button
+                  onClick={() => {
+                    navigate("/member/dashboard");
+                  }}
+                  className="px-8 py-3 bg-[#8c78ec] text-white rounded-xl font-bold hover:bg-[#7a66d3] transition shadow-lg"
+                >
+                  Khám phá khóa học
                 </button>
               </div>
             )}

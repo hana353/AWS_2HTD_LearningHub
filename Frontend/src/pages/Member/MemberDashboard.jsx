@@ -98,6 +98,7 @@ export default function MemberDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [joinStatus, setJoinStatus] = useState({});
+  const [showAllCourses, setShowAllCourses] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -187,6 +188,13 @@ export default function MemberDashboard() {
       .sort((a, b) => (b.publishedMs ?? 0) - (a.publishedMs ?? 0))
       .slice(0, 6);
   }, [courses]);
+
+  const allCourses = useMemo(() => {
+    if (courses.length === 0) return [];
+    return [...courses].sort((a, b) => (b.publishedMs ?? 0) - (a.publishedMs ?? 0));
+  }, [courses]);
+
+  const displayedCourses = showAllCourses ? allCourses : latestCourses;
 
   const highlightCourse = latestCourses.length > 0 ? latestCourses[0] : null;
   const highlightJoinState = highlightCourse
@@ -480,11 +488,15 @@ export default function MemberDashboard() {
               </p>
             </div>
             <button
-              onClick={() => navigate("/member/courses")}
+              onClick={() => setShowAllCourses(!showAllCourses)}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-[#5a4d8c] hover:border-[#8c78ec] transition"
             >
-              Xem tất cả
-              <ArrowRight size={16} />
+              {showAllCourses ? "Thu gọn" : "Xem tất cả"}
+              {showAllCourses ? (
+                <ArrowRight size={16} className="rotate-180" />
+              ) : (
+                <ArrowRight size={16} />
+              )}
             </button>
           </div>
 
@@ -511,13 +523,13 @@ export default function MemberDashboard() {
             <div className="bg-red-50 border border-red-200 text-red-600 px-6 py-4 rounded-2xl">
               {error}
             </div>
-          ) : latestCourses.length === 0 ? (
+          ) : displayedCourses.length === 0 ? (
             <div className="border border-dashed border-gray-200 rounded-3xl p-10 text-center text-gray-500">
               Hiện chưa có khóa học nào được xuất bản.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {latestCourses.map((course) => (
+              {displayedCourses.map((course) => (
                 <CourseCard
                   key={course.id}
                   course={course}
