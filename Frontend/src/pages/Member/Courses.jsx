@@ -6,8 +6,8 @@ import React, {
     useState,
   } from "react";
   import { useNavigate } from "react-router-dom";
-  import { CheckCircle, Clock, PlayCircle, Search, Trophy } from "lucide-react";
-  import { getMyCourses } from "../../services/memberService";
+  import { Calendar, Clock, Search, ArrowRight, Loader2 } from "lucide-react";
+  import { getPublishedCourses, enrollCourse } from "../../services/memberService";
   
   const PLACEHOLDER_IMAGES = [
     "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?q=80&w=1000&auto=format&fit=crop",
@@ -15,31 +15,6 @@ import React, {
     "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1000&auto=format&fit=crop",
     "https://images.unsplash.com/photo-1472289065668-ce650ac443d2?q=80&w=1000&auto=format&fit=crop",
   ];
-  
-  const STATUS_LABEL = {
-    "in-progress": "Đang học",
-    completed: "Đã hoàn thành",
-  };
-  
-  const normalizeStatus = (value) => {
-    if (!value) return "in-progress";
-    const key = value.toString().toLowerCase();
-    if (["completed", "complete", "done", "finished"].includes(key)) {
-      return "completed";
-    }
-    if (
-      ["active", "in-progress", "progress", "ongoing", "started"].includes(key)
-    ) {
-      return "in-progress";
-    }
-    return "in-progress";
-  };
-  
-  const clampPercent = (value) => {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return 0;
-    return Math.min(100, Math.max(0, Math.round(number)));
-  };
   
   const formatDate = (value) => {
     if (!value) return "Chưa có dữ liệu";
@@ -50,6 +25,15 @@ import React, {
       month: "2-digit",
       year: "numeric",
     });
+  };
+  
+  const formatCurrency = (price, currency = "VND") => {
+    if (price === null || price === undefined) return "Miễn phí";
+    if (price === 0) return "Miễn phí";
+    return new Intl.NumberFormat("vi-VN", {
+      style: "currency",
+      currency: currency,
+    }).format(price);
   };
   
   const hashToIndex = (key) => {
@@ -64,21 +48,25 @@ import React, {
   };
   
   const mapCourse = (course) => {
-    const id = course?.courseId || course?.id || "";
-    const status = normalizeStatus(course?.status);
+    const rawPrice =
+      typeof course?.price === "number"
+        ? course.price
+        : Number(course?.price ?? NaN);
+    const price = Number.isFinite(rawPrice) ? rawPrice : null;
+    const publishedAt = course?.publishedAt || course?.createdAt || null;
+    
     return {
-      id,
+      id: course?.courseId || course?.id || "",
+      slug: course?.slug || "",
       title: course?.title || "Khóa học chưa đặt tên",
       shortDescription: course?.shortDescription || "",
-      progress: clampPercent(course?.progressPercent),
-      status,
-      statusLabel:
-        STATUS_LABEL[status] || course?.status || "Trạng thái chưa xác định",
-      originalStatus: course?.status ?? null,
-      enrolledAt: course?.enrolledAt ?? null,
-      enrolledDate: formatDate(course?.enrolledAt),
-      image: PLACEHOLDER_IMAGES[hashToIndex(id)],
-      hasRoute: Boolean(id),
+      price,
+      currency: course?.currency || "VND",
+      publishedAt,
+      publishedDate: formatDate(publishedAt),
+      isFree: price === 0 || price === null,
+      image: PLACEHOLDER_IMAGES[hashToIndex(course?.courseId || course?.id || "")],
+      hasRoute: Boolean(course?.courseId || course?.id),
     };
   };
   
@@ -87,23 +75,23 @@ import React, {
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [filterStatus, setFilterStatus] = useState("all");
     const [searchTerm, setSearchTerm] = useState("");
-  
+    const [joinStatus, setJoinStatus] = useState({});
+
     const isMountedRef = useRef(true);
-  
+
     useEffect(() => {
       isMountedRef.current = true;
       return () => {
         isMountedRef.current = false;
       };
     }, []);
-  
+
     const fetchCourses = useCallback(async () => {
       setLoading(true);
       setError(null);
       try {
-        const data = await getMyCourses();
+        const data = await getPublishedCourses();
         if (!isMountedRef.current) return;
         const mapped = (Array.isArray(data) ? data : []).map(mapCourse);
         setCourses(mapped);
@@ -117,29 +105,67 @@ import React, {
         }
       }
     }, []);
-  
+
     useEffect(() => {
       fetchCourses();
     }, [fetchCourses]);
-  
+
+    const handleOpenCourse = useCallback(
+      (courseId) => {
+        if (!courseId) return;
+        navigate(`/member/course/${courseId}`);
+      },
+      [navigate]
+    );
+
+    const handleJoinCourse = useCallback(async (courseId) => {
+      if (!courseId) return;
+
+      setJoinStatus((prev) => ({
+        ...prev,
+        [courseId]: {
+          loading: true,
+          success: prev[courseId]?.success ?? false,
+          error: null,
+        },
+      }));
+
+      try {
+        await enrollCourse(courseId);
+        setJoinStatus((prev) => ({
+          ...prev,
+          [courseId]: {
+            loading: false,
+            success: true,
+            error: null,
+          },
+        }));
+        // Refresh courses after joining
+        fetchCourses();
+      } catch (err) {
+        setJoinStatus((prev) => ({
+          ...prev,
+          [courseId]: {
+            loading: false,
+            success: false,
+            error: err?.message || "Đăng ký khóa học thất bại. Vui lòng thử lại.",
+          },
+        }));
+      }
+    }, [fetchCourses]);
+
     const totalCourses = courses.length;
-    const completedCount = useMemo(
-      () => courses.filter((course) => course.status === "completed").length,
+    const freeCount = useMemo(
+      () => courses.filter((course) => course.isFree).length,
       [courses]
     );
-    const inProgressCount = useMemo(
-      () => courses.filter((course) => course.status === "in-progress").length,
-      [courses]
-    );
-  
+    const paidCount = totalCourses - freeCount;
+
     const filteredCourses = useMemo(() => {
       const normalizedSearch = searchTerm.trim().toLowerCase();
+      if (!normalizedSearch) return courses;
+      
       return courses.filter((course) => {
-        const matchesStatus =
-          filterStatus === "all" || course.status === filterStatus;
-        if (!matchesStatus) return false;
-  
-        if (!normalizedSearch) return true;
         const title = course.title?.toLowerCase() || "";
         const description = course.shortDescription?.toLowerCase() || "";
         return (
@@ -147,7 +173,7 @@ import React, {
           description.includes(normalizedSearch)
         );
       });
-    }, [courses, filterStatus, searchTerm]);
+    }, [courses, searchTerm]);
   
     return (
       <div className="w-full space-y-8 pb-10">
@@ -158,14 +184,13 @@ import React, {
           <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
             <div>
               <h1 className="text-3xl font-extrabold text-[#5a4d8c] mb-2">
-                Khóa học của tôi
+                Tất cả khóa học
               </h1>
               <p className="text-gray-600 max-w-lg">
-                Tiếp tục hành trình chinh phục tri thức. Hãy hoàn thành các bài
-                học còn dang dở.
+                Khám phá các khóa học được tạo bởi admin. Tham gia ngay để bắt đầu hành trình học tập của bạn.
               </p>
             </div>
-  
+
             <div className="flex gap-3 bg-white/60 backdrop-blur-md p-2 rounded-2xl border border-white/50 shadow-sm">
               <div className="px-4 py-2 text-center border-r border-gray-200">
                 <div className="text-[#5a4d8c] font-bold text-xl">
@@ -177,45 +202,25 @@ import React, {
               </div>
               <div className="px-4 py-2 text-center border-r border-gray-200">
                 <div className="text-emerald-600 font-bold text-xl">
-                  {completedCount}
+                  {freeCount}
                 </div>
                 <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                  Xong
+                  Miễn phí
                 </div>
               </div>
               <div className="px-4 py-2 text-center">
                 <div className="text-indigo-600 font-bold text-xl">
-                  {inProgressCount}
+                  {paidCount}
                 </div>
                 <div className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">
-                  Đang học
+                  Có phí
                 </div>
               </div>
             </div>
           </div>
         </div>
   
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 flex gap-1">
-            {[
-              { key: "all", label: "Tất cả" },
-              { key: "in-progress", label: "Đang học" },
-              { key: "completed", label: "Đã hoàn thành" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setFilterStatus(tab.key)}
-                className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 ${
-                  filterStatus === tab.key
-                    ? "bg-[#8c78ec] text-white shadow-md shadow-purple-200"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-[#5a4d8c]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-  
+        <div className="flex flex-col md:flex-row justify-end items-center gap-4">
           <div className="relative group w-full md:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 group-hover:text-[#8c78ec] transition-colors" />
             <input
@@ -261,28 +266,33 @@ import React, {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {filteredCourses.map((course) => {
                   const cardKey = course.id || course.title;
-                  const isCompleted = course.status === "completed";
-                  const buttonBaseClass = isCompleted
-                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100"
-                    : "bg-[#8c78ec] text-white hover:bg-[#7a66d3] shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:-translate-y-1";
-  
+                  const joinState = joinStatus[course.id] || {};
+                  const isJoining = Boolean(joinState.loading);
+                  const isJoined = Boolean(joinState.success);
+                  const joinError = joinState.error;
+
                   return (
                     <div
                       key={cardKey}
                       className="group bg-white rounded-3xl p-5 border border-gray-100 shadow-sm hover:shadow-xl hover:shadow-indigo-100/50 transition-all duration-300 flex flex-col h-full relative"
                     >
-                      <div className="absolute top-8 right-8 z-20">
+                      <div className="absolute top-5 right-5 z-20 flex gap-2">
+                        <span className="text-xs font-semibold text-[#8c78ec] bg-indigo-50 px-3 py-1 rounded-full">
+                          {course.slug || "Khóa học"}
+                        </span>
                         <span
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border backdrop-blur-md shadow-sm ${
-                            isCompleted
-                              ? "bg-white/90 text-green-600 border-green-100"
-                              : "bg-white/90 text-indigo-600 border-indigo-100"
+                          className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                            course.isFree
+                              ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                              : "bg-purple-50 text-purple-600 border border-purple-100"
                           }`}
                         >
-                          {course.statusLabel}
+                          {course.isFree
+                            ? "Miễn phí"
+                            : formatCurrency(course.price, course.currency)}
                         </span>
                       </div>
-  
+
                       <div className="h-48 rounded-2xl mb-5 relative overflow-hidden shadow-inner group-hover:shadow-md transition-all">
                         <img
                           src={course.image}
@@ -291,7 +301,7 @@ import React, {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                       </div>
-  
+
                       <div className="flex-1 flex flex-col">
                         <h3
                           className="text-lg font-bold text-gray-800 mb-2 group-hover:text-[#8c78ec] transition-colors line-clamp-2"
@@ -303,64 +313,52 @@ import React, {
                           {course.shortDescription ||
                             "Chưa có mô tả cho khóa học này."}
                         </p>
-  
-                        <div className="mb-5 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                          <div className="flex justify-between items-end mb-2">
-                            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                              Tiến độ
-                            </span>
-                            <span className="text-sm font-bold text-[#5a4d8c]">
-                              {course.progress}%
-                            </span>
+
+                        <div className="flex items-center justify-between text-xs text-gray-400 mb-5 border-t border-gray-100 pt-4">
+                          <div className="flex items-center gap-1">
+                            <Calendar size={14} className="text-[#8c78ec]" />
+                            {course.publishedDate}
                           </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                                isCompleted
-                                  ? "bg-gradient-to-r from-emerald-400 to-green-500"
-                                  : "bg-gradient-to-r from-[#8c78ec] to-[#5a4d8c]"
-                              }`}
-                              style={{ width: `${course.progress}%` }}
-                            ></div>
+                          <div className="flex items-center gap-1">
+                            <Clock size={14} className="text-[#8c78ec]" />
+                            Phát hành
                           </div>
                         </div>
-  
-                        <div className="flex flex-wrap items-center gap-4 mb-5 text-sm text-gray-500 border-t border-gray-100 pt-4">
-                          <div className="flex items-center gap-1.5">
-                            <CheckCircle
-                              size={16}
-                              className={
-                                isCompleted
-                                  ? "text-emerald-500"
-                                  : "text-[#8c78ec]"
-                              }
-                            />
-                            <span>{course.statusLabel}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <Clock size={16} className="text-[#8c78ec]" />
-                            <span>Đăng ký: {course.enrolledDate}</span>
-                          </div>
-                        </div>
-  
-                        <button
-                          onClick={() =>
-                            course.hasRoute &&
-                            navigate(`/member/course/${course.id}`)
-                          }
-                          disabled={!course.hasRoute}
-                          className={`mt-auto w-full py-3.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all duration-300 ${buttonBaseClass} disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none`}
-                        >
-                          {isCompleted ? (
-                            <>
-                              <Trophy size={18} /> Xem chứng chỉ
-                            </>
-                          ) : (
-                            <>
-                              <PlayCircle size={18} /> Vào học ngay
-                            </>
+
+                        <div className="mt-auto space-y-2">
+                          <button
+                            onClick={() => handleJoinCourse(course.id)}
+                            disabled={isJoining || isJoined}
+                            className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2 transition-all duration-300 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-emerald-500"
+                          >
+                            {isJoining ? (
+                              <>
+                                <Loader2 size={16} className="animate-spin" />
+                                Đang tham gia...
+                              </>
+                            ) : isJoined ? (
+                              "Đã tham gia"
+                            ) : (
+                              "Tham gia khóa học"
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleOpenCourse(course.id)}
+                            disabled={isJoining}
+                            className="w-full py-3 rounded-xl bg-[#8c78ec] text-white font-semibold hover:bg-[#7a66d3] transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            Xem chi tiết
+                            <ArrowRight size={16} />
+                          </button>
+                          {joinError && (
+                            <p className="text-xs text-red-500 text-center">{joinError}</p>
                           )}
-                        </button>
+                          {isJoined && !joinError && (
+                            <p className="text-xs text-emerald-600 text-center">
+                              Bạn đã đăng ký khóa học này.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -381,7 +379,6 @@ import React, {
                 </p>
                 <button
                   onClick={() => {
-                    setFilterStatus("all");
                     setSearchTerm("");
                   }}
                   className="px-8 py-3 bg-[#8c78ec] text-white rounded-xl font-bold hover:bg-[#7a66d3] transition shadow-lg"
