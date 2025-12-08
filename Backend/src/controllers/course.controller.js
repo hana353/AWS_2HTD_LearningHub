@@ -20,6 +20,8 @@ import {
   getLecturesByTeacherInCourseService,
   isTeacherOfCourseService,
   getTopPopularCoursesService,
+  getLectureDetailService,
+  isUserEnrolledInCourseService,
 } from "../services/course.service.js";
 
 // ===== Helpers: lấy userId & roleId từ req.user =====
@@ -376,9 +378,10 @@ const canManageCourseContent = async (user, course, userId) => {
   if (isTeacher(user)) {
     if (course.creatorId === userId) return true;
 
+    const courseId = course.courseId || course.id;
     const isTeacherOfCourse = await isTeacherOfCourseService(
-      course.courseId || course.id,
-      userId
+      userId,
+      courseId
     );
     if (isTeacherOfCourse) return true;
   }
@@ -602,6 +605,36 @@ export const getCourseDetail = async (req, res) => {
     return res.status(200).json(course);
   } catch (err) {
     console.error("getCourseDetail error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// GET /api/courses/:courseId/lectures/:lectureId
+export const getLectureDetail = async (req, res) => {
+  try {
+    const { courseId, lectureId } = req.params;
+    const userId = getUserId(req.user);
+    
+    // Kiểm tra user đã enroll vào course chưa
+    if (userId) {
+      const isEnrolled = await isUserEnrolledInCourseService(userId, courseId);
+      if (!isEnrolled) {
+        return res.status(403).json({
+          message: "Bạn cần đăng ký khóa học trước khi xem bài giảng",
+        });
+      }
+    }
+
+    const lecture = await getLectureDetailService(courseId, lectureId);
+    if (!lecture) {
+      return res.status(404).json({
+        message: "Lecture not found or not published",
+      });
+    }
+
+    return res.status(200).json(lecture);
+  } catch (err) {
+    console.error("getLectureDetail error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

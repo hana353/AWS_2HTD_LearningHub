@@ -93,7 +93,10 @@ export default function MemberCourseDetail() {
     <div className="space-y-8 pb-10">
       <div className="flex items-center gap-4">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            // Quay về trang danh sách khóa học để tránh vòng lặp
+            navigate('/member/courses', { replace: false });
+          }}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-600 hover:text-[#5a4d8c] hover:border-[#8c78ec] transition"
         >
           <ArrowLeft size={18} />
@@ -217,21 +220,34 @@ export default function MemberCourseDetail() {
                 </div>
               ) : (
                 <ul className="space-y-3">
-                  {lectures.map((lecture, index) => (
-                    <li
-                      key={lecture.lectureId || lecture.id || index}
-                      className="bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex flex-col gap-1"
-                    >
-                      <span className="text-sm font-semibold text-gray-800">
-                        {lecture.title || `Bài giảng ${index + 1}`}
-                      </span>
-                      {lecture.durationMinutes && (
-                        <span className="text-xs text-gray-500">
-                          Thời lượng: {lecture.durationMinutes} phút
+                  {lectures.map((lecture, index) => {
+                    const lectureId = lecture.lectureId || lecture.id;
+                    const durationMinutes = lecture.durationMinutes || 
+                      (lecture.durationSeconds ? Math.round(lecture.durationSeconds / 60) : null);
+                    
+                    return (
+                      <li
+                        key={lectureId || index}
+                        onClick={() => {
+                          if (lectureId) {
+                            navigate(`/member/course/${courseId}/lecture/${lectureId}`);
+                          }
+                        }}
+                        className={`bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 flex flex-col gap-1 ${
+                          lectureId ? 'cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition-colors' : ''
+                        }`}
+                      >
+                        <span className="text-sm font-semibold text-gray-800">
+                          {lecture.title || `Bài giảng ${index + 1}`}
                         </span>
-                      )}
-                    </li>
-                  ))}
+                        {durationMinutes && (
+                          <span className="text-xs text-gray-500">
+                            Thời lượng: {durationMinutes} phút
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>

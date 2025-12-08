@@ -20,6 +20,7 @@ import {
   getTeacherCourses,
   getLecturesByTeacherInCourse,
   getTopPopularCourses,
+  getLectureDetail,
 } from "../controllers/course.controller.js";
 
 
@@ -108,6 +109,13 @@ router.get("/courses", getPublishedCourses);
 
 // Chi tiết 1 course
 router.get("/courses/:courseId", getCourseDetail);
+
+// Chi tiết 1 lecture (cần auth để kiểm tra enrollment)
+router.get(
+  "/courses/:courseId/lectures/:lectureId",
+  authMiddleware,
+  getLectureDetail
+);
 
 // Member enroll course
 router.post(

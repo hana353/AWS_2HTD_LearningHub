@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Users, Layers, FilePlus, PieChart, Calendar as CalendarIcon, ArrowUpRight } from 'lucide-react';
 import { getTeacherCourses } from '../../services/teacherService';
 import { getExams } from '../../services/teacherService';
+import { getMyProfile } from '../../services/profileService';
 
 /**
  * Teacher Dashboard - Professional UI
@@ -36,12 +37,24 @@ export default function TeacherDashboard() {
   const [assignments, setAssignments] = useState([]);
   const [exams, setExams] = useState([]);
   const [weeklyActivity, setWeeklyActivity] = useState([]);
+  const [userName, setUserName] = useState("Giáo viên");
 
   // Load data từ API
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        
+        // Lấy profile để hiển thị tên người dùng
+        try {
+          const profile = await getMyProfile();
+          if (profile?.fullName) {
+            setUserName(profile.fullName);
+          }
+        } catch (profileError) {
+          console.error("Error fetching profile:", profileError);
+          // Không set error nếu không lấy được profile, chỉ dùng default "Giáo viên"
+        }
         
         // Load courses (classes)
         const coursesData = await getTeacherCourses();
@@ -151,7 +164,13 @@ export default function TeacherDashboard() {
       {/* --- HEADER --- */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 animate-fade-in-up">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Dashboard Giảng Viên</h1>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Xin chào,{" "}
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">
+              {userName}!
+            </span>{" "}
+            🚀
+          </h1>
           <p className="text-slate-500 mt-1 flex items-center gap-2">
             <CalendarIcon size={14} /> 
             {new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}

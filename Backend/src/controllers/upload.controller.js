@@ -256,25 +256,42 @@ export const uploadImage = async (req, res) => {
  */
 export const getPresignedUrl = async (req, res) => {
   try {
-    const { s3Key } = req.params;
+    let { s3Key } = req.params;
     if (!s3Key) {
       return res.status(400).json({ message: 's3Key is required' });
     }
+
+    // Decode URI component nếu cần
+    try {
+      s3Key = decodeURIComponent(s3Key);
+    } catch (e) {
+      // Nếu decode fail thì dùng nguyên bản
+      console.warn('Failed to decode s3Key, using original:', s3Key);
+    }
+
+    console.log('Generating presigned URL for s3Key:', s3Key);
 
     const expiresIn = parseInt(req.query.expiresIn) || 3600; // Default 1 hour
 
     const url = await generatePresignedDownloadUrl(s3Key, expiresIn);
 
     if (!url) {
-      return res.status(404).json({ message: 'File not found' });
+      console.error('Failed to generate presigned URL for:', s3Key);
+      return res.status(404).json({ message: 'File not found or cannot generate URL' });
     }
 
+    console.log('Presigned URL generated successfully');
     return res.status(200).json({
       url,
       expiresIn,
     });
   } catch (err) {
     console.error('getPresignedUrl error:', err);
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      name: err.name,
+    });
     return res.status(500).json({
       message: 'Failed to generate presigned URL',
       error: err.message,

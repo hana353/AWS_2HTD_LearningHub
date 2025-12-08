@@ -5,7 +5,7 @@ import React, {
     useRef,
     useState,
   } from "react";
-  import { useNavigate } from "react-router-dom";
+  import { useNavigate, useLocation } from "react-router-dom";
   import { Calendar, Clock, Search, ArrowRight, Loader2 } from "lucide-react";
   import { getMyCourses } from "../../services/memberService";
   
@@ -68,6 +68,7 @@ import React, {
   
   export default function Courses() {
     const navigate = useNavigate();
+    const location = useLocation();
     const [courses, setCourses] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -103,6 +104,26 @@ import React, {
 
     useEffect(() => {
       fetchCourses();
+    }, [fetchCourses]);
+
+    // Refresh courses khi quay lại từ lecture view để cập nhật tiến độ
+    useEffect(() => {
+      // Refresh khi location thay đổi (khi quay lại từ trang khác)
+      if (location.pathname === '/member/courses') {
+        fetchCourses();
+      }
+    }, [location.pathname, fetchCourses]);
+
+    // Refresh khi window focus (khi quay lại tab)
+    useEffect(() => {
+      const handleFocus = () => {
+        fetchCourses();
+      };
+
+      window.addEventListener('focus', handleFocus);
+      return () => {
+        window.removeEventListener('focus', handleFocus);
+      };
     }, [fetchCourses]);
 
     const handleOpenCourse = useCallback(

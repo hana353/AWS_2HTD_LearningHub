@@ -85,17 +85,42 @@ export async function generatePresignedUploadUrl(
  * @returns {Promise<string>} Presigned URL
  */
 export async function generatePresignedDownloadUrl(key, expiresIn = 3600) {
-  if (!key) return null;
+  if (!key) {
+    console.error('generatePresignedDownloadUrl: key is required');
+    return null;
+  }
 
-  const cleanKey = key.replace(/^https?:\/\/.*?\//, '');
+  // Clean key: remove full URL prefix nếu có
+  let cleanKey = key.replace(/^https?:\/\/.*?\//, '');
+  // Remove query string nếu có
+  cleanKey = cleanKey.split('?')[0];
+  // Trim whitespace
+  cleanKey = cleanKey.trim();
 
-  const command = new GetObjectCommand({
-    Bucket: S3_BUCKET_NAME,
-    Key: cleanKey,
+  console.log('Generating presigned URL:', {
+    originalKey: key,
+    cleanKey: cleanKey,
+    bucket: S3_BUCKET_NAME,
+    expiresIn,
   });
 
-  const url = await getSignedUrl(s3Client, command, { expiresIn });
-  return url;
+  try {
+    const command = new GetObjectCommand({
+      Bucket: S3_BUCKET_NAME,
+      Key: cleanKey,
+    });
+
+    const url = await getSignedUrl(s3Client, command, { expiresIn });
+    console.log('Presigned URL generated successfully');
+    return url;
+  } catch (error) {
+    console.error('Error generating presigned URL:', {
+      error: error.message,
+      code: error.code,
+      key: cleanKey,
+    });
+    throw error;
+  }
 }
 
 /**

@@ -147,10 +147,18 @@ export default function TeacherClasses() {
     setUploadingFile(true);
     try {
       const result = await uploadLectureFile(file, courseId);
-      return result.s3Key || result.key;
+      const s3Key = result?.s3Key || result?.key;
+      if (!s3Key) {
+        console.error('Upload response không có s3Key:', result);
+        toast.error('Upload file thành công nhưng không nhận được S3 Key. Vui lòng thử lại.');
+        return null;
+      }
+      return s3Key;
     } catch (error) {
-      toast.error(error.message || 'Upload file thất bại');
-      throw error;
+      console.error('Upload file error:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Upload file thất bại';
+      toast.error(errorMessage);
+      return null;
     } finally {
       setUploadingFile(false);
     }
@@ -225,21 +233,51 @@ export default function TeacherClasses() {
       return;
     }
 
+    console.log('handleSubmitLecture - selectedFile:', selectedFile);
+    console.log('handleSubmitLecture - values.s3Key:', values.s3Key);
+    console.log('handleSubmitLecture - editingLecture:', editingLecture);
+
     try {
       let s3Key = values.s3Key;
 
       // Nếu có file mới được chọn, upload file trước
       if (selectedFile) {
-        s3Key = await handleFileUpload(selectedFile, selectedCourse.courseId);
-        if (!s3Key) {
+        console.log('Bắt đầu upload file:', selectedFile.name);
+        try {
+          s3Key = await handleFileUpload(selectedFile, selectedCourse.courseId);
+          console.log('Upload file kết quả - s3Key:', s3Key);
+          if (!s3Key) {
+            // handleFileUpload đã hiển thị thông báo lỗi
+            console.error('Upload file thất bại - không có s3Key');
+            setSubmitting(false);
+            return;
+          }
+        } catch (error) {
+          // handleFileUpload đã xử lý lỗi và trả về null
+          console.error('Upload file exception:', error);
           setSubmitting(false);
           return;
         }
       }
 
+      // Nếu đang edit và không có file mới, sử dụng s3Key cũ từ editingLecture
+      if (editingLecture && !selectedFile && !s3Key) {
+        s3Key = editingLecture.s3Key;
+      }
+
       // Nếu không có s3Key (không có file và không có s3Key cũ), báo lỗi
-      if (!s3Key && !editingLecture) {
-        toast.error('Vui lòng chọn file hoặc nhập S3 Key');
+      console.log('Kiểm tra s3Key cuối cùng:', s3Key);
+      if (!s3Key || (typeof s3Key === 'string' && s3Key.trim() === '')) {
+        console.error('Không có s3Key - selectedFile:', selectedFile, 'editingLecture:', editingLecture);
+        if (!editingLecture) {
+          if (selectedFile) {
+            toast.error('Upload file thất bại. Vui lòng thử lại hoặc kiểm tra kết nối mạng.');
+          } else {
+            toast.error('Vui lòng chọn file hoặc nhập S3 Key');
+          }
+        } else {
+          toast.error('Vui lòng chọn file mới hoặc giữ nguyên file hiện tại');
+        }
         setSubmitting(false);
         return;
       }

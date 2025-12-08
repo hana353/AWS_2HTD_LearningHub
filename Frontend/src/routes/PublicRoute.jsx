@@ -25,6 +25,7 @@ import AdminNotifications from "../pages/Admin/AdminNotifications";
 import MemberDashboard from "../pages/Member/MemberDashboard";
 import Courses from "../pages/Member/Courses";
 import MemberCourseDetail from "../pages/Member/MemberCourseDetail";
+import MemberLectureView from "../pages/Member/MemberLectureView";
 import MemberTests from "../pages/Member/MemberTests";
 import TestAttempt from "../pages/Member/TestAttempt";
 import TestReview from "../pages/Member/TestReview";
@@ -81,6 +82,7 @@ const routes = createBrowserRouter([
       { index: true, element: <MemberDashboard /> },
       { path: "courses", element: <Courses /> },
       { path: "course/:courseId", element: <MemberCourseDetail /> },
+      { path: "course/:courseId/lecture/:lectureId", element: <MemberLectureView /> },
       { path: "test", element: <MemberTests /> },
       { path: "practices", element: <MemberPractices /> },
       { path: "practice/:id", element: <MemberPracticeDetail /> },

@@ -63,6 +63,23 @@ export async function getCourseDetail(courseId) {
   }
 }
 
+// Fetch lecture detail
+export async function getLectureDetail(courseId, lectureId) {
+  if (!courseId || !lectureId) {
+    throw new Error("courseId and lectureId are required");
+  }
+
+  try {
+    const res = await apiClient.get(`/api/courses/${courseId}/lectures/${lectureId}`);
+    const body = res.data;
+
+    if (body && body.data) return body.data;
+    return body;
+  } catch (err) {
+    throw err;
+  }
+}
+
 // Enroll current member into a course
 export async function enrollCourse(courseId) {
   if (!courseId) {
@@ -173,6 +190,26 @@ export async function getPracticeStudy(practiceId, limit = 10) {
   }
 }
 
+// Update lecture progress
+export async function updateLectureProgress(courseId, lectureId, watchedSeconds, completed) {
+  if (!courseId || !lectureId) {
+    throw new Error("courseId and lectureId are required");
+  }
+
+  try {
+    const res = await apiClient.post(
+      `/api/courses/${courseId}/lectures/${lectureId}/progress`,
+      {
+        watchedSeconds: watchedSeconds || null,
+        completed: completed || false,
+      }
+    );
+    return res.data;
+  } catch (err) {
+    throw err;
+  }
+}
+
 // add to default export for convenience
 export default {
   getPublicExams,
@@ -180,6 +217,8 @@ export default {
   getPublishedCourses,
   getCourseDetail,
   enrollCourse,
+  getLectureDetail,
+  updateLectureProgress,
   getSubmissionReview,
   getPractices,
   getPracticeById,

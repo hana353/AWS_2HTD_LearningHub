@@ -16,7 +16,9 @@ import {
 import {
   enrollCourse,
   getPublishedCourses,
+  getMyCourses,
 } from "../../services/memberService";
+import { getMyProfile } from "../../services/profileService";
 
 const formatDateTime = (value) => {
   if (!value) return "Chưa cập nhật";
@@ -99,18 +101,51 @@ export default function MemberDashboard() {
   const [error, setError] = useState(null);
   const [joinStatus, setJoinStatus] = useState({});
   const [showAllCourses, setShowAllCourses] = useState(false);
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState(new Set());
+  const [userName, setUserName] = useState("học viên");
 
   useEffect(() => {
     let active = true;
 
-    const fetchCourses = async () => {
+    const fetchData = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await getPublishedCourses();
+        // Lấy profile để hiển thị tên người dùng
+        try {
+          const profile = await getMyProfile();
+          if (active && profile?.fullName) {
+            setUserName(profile.fullName);
+          }
+        } catch (profileError) {
+          console.error("Error fetching profile:", profileError);
+          // Không set error nếu không lấy được profile, chỉ dùng default "học viên"
+        }
+
+        // Lấy cả published courses và my courses để biết khóa học nào đã enroll
+        const [publishedResponse, myCoursesResponse] = await Promise.all([
+          getPublishedCourses(),
+          getMyCourses().catch(() => []), // Nếu lỗi thì trả về mảng rỗng
+        ]);
+        
         if (!active) return;
 
-        const mapped = (Array.isArray(response) ? response : []).map(mapCourse);
+        // Tạo Set các courseId đã enroll
+        const enrolledIds = new Set(
+          (Array.isArray(myCoursesResponse) ? myCoursesResponse : []).map(
+            (course) => course.courseId || course.id
+          )
+        );
+        setEnrolledCourseIds(enrolledIds);
+
+        // Map courses và thêm flag isEnrolled
+        const mapped = (Array.isArray(publishedResponse) ? publishedResponse : []).map((course) => {
+          const courseId = course.courseId || course.id;
+          return {
+            ...mapCourse(course),
+            isEnrolled: enrolledIds.has(courseId),
+          };
+        });
         setCourses(mapped);
       } catch (err) {
         if (!active) return;
@@ -123,7 +158,7 @@ export default function MemberDashboard() {
       }
     };
 
-    fetchCourses();
+    fetchData();
 
     return () => {
       active = false;
@@ -198,7 +233,10 @@ export default function MemberDashboard() {
 
   const highlightCourse = latestCourses.length > 0 ? latestCourses[0] : null;
   const highlightJoinState = highlightCourse
-    ? joinStatus[highlightCourse.id] || {}
+    ? {
+        ...joinStatus[highlightCourse.id],
+        success: joinStatus[highlightCourse.id]?.success || highlightCourse.isEnrolled || false,
+      }
     : {};
 
   const statusIndicatorClass = loading
@@ -235,6 +273,14 @@ export default function MemberDashboard() {
 
     try {
       await enrollCourse(courseId);
+      // Cập nhật enrolledCourseIds
+      setEnrolledCourseIds((prev) => new Set([...prev, courseId]));
+      // Cập nhật courses để set isEnrolled = true
+      setCourses((prev) =>
+        prev.map((course) =>
+          course.id === courseId ? { ...course, isEnrolled: true } : course
+        )
+      );
       setJoinStatus((prev) => ({
         ...prev,
         [courseId]: {
@@ -276,7 +322,7 @@ export default function MemberDashboard() {
               <h1 className="text-3xl md:text-4xl font-extrabold mb-2 text-gray-800">
                 Xin chào,{" "}
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">
-                  học viên!
+                  {userName}!
                 </span>{" "}
                 🚀
               </h1>
@@ -412,7 +458,11 @@ export default function MemberDashboard() {
                           highlightJoinState.loading ||
                           highlightJoinState.success
                         }
-                        className="px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg bg-emerald-500 hover:bg-emerald-400 text-white disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-emerald-500"
+                        className={`px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition shadow-lg text-white ${
+                          highlightJoinState.success
+                            ? "bg-gray-400 cursor-not-allowed"
+                            : "bg-emerald-500 hover:bg-emerald-400"
+                        } ${highlightJoinState.loading ? "opacity-60 cursor-not-allowed" : ""}`}
                       >
                         {highlightJoinState.loading ? (
                           <>
@@ -442,11 +492,6 @@ export default function MemberDashboard() {
                     {highlightJoinState.error && (
                       <p className="text-sm text-red-200 mt-3">
                         {highlightJoinState.error}
-                      </p>
-                    )}
-                    {highlightJoinState.success && (
-                      <p className="text-sm text-emerald-200 mt-3">
-                        Bạn đã tham gia khóa học này.
                       </p>
                     )}
                   </>
@@ -669,7 +714,7 @@ const CircularProgress = ({ percentage, size = 200, strokeWidth = 18 }) => {
 
 const CourseCard = ({ course, onOpen, onJoin, joinState = {} }) => {
   const isJoining = Boolean(joinState.loading);
-  const isJoined = Boolean(joinState.success);
+  const isJoined = Boolean(joinState.success) || Boolean(course.isEnrolled);
   const joinError = joinState.error;
 
   return (
@@ -715,7 +760,11 @@ const CourseCard = ({ course, onOpen, onJoin, joinState = {} }) => {
         <button
           onClick={() => onJoin(course.id)}
           disabled={isJoining || isJoined}
-          className="w-full py-3 rounded-xl bg-emerald-500 text-white font-semibold flex items-center justify-center gap-2 transition-all duration-300 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-emerald-500"
+          className={`w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition-all duration-300 ${
+            isJoined
+              ? "bg-gray-400 text-white cursor-not-allowed"
+              : "bg-emerald-500 text-white hover:bg-emerald-400"
+          } ${isJoining ? "opacity-60 cursor-not-allowed" : ""}`}
         >
           {isJoining ? (
             <>
@@ -738,11 +787,6 @@ const CourseCard = ({ course, onOpen, onJoin, joinState = {} }) => {
         </button>
         {joinError && (
           <p className="text-xs text-red-500 text-center">{joinError}</p>
-        )}
-        {isJoined && !joinError && (
-          <p className="text-xs text-emerald-600 text-center">
-            Bạn đã đăng ký khóa học này.
-          </p>
         )}
       </div>
     </div>
