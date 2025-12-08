@@ -92,7 +92,7 @@ export default function TeacherNotifications() {
         let title = 'Thông báo';
         let message = '';
         let actionUrl = null;
-        let details = null;
+        let details = null; // Thông tin chi tiết để hiển thị thêm
 
         switch (type) {
             case 'NEW_SUBMISSION':
@@ -105,7 +105,7 @@ export default function TeacherNotifications() {
                     score: payload.totalScore ? `${payload.totalScore} điểm` : null
                 };
                 if (payload.examId) {
-                    actionUrl = `/teacher/quiz`; // Điều chỉnh route cho teacher
+                    actionUrl = `/teacher/quiz`;
                 }
                 break;
 
@@ -117,7 +117,7 @@ export default function TeacherNotifications() {
                     studentId: payload.studentId
                 };
                 if (payload.courseId) {
-                    actionUrl = `/teacher/classes`; // Điều chỉnh route cho teacher
+                    actionUrl = `/teacher/classes`;
                 }
                 break;
 
@@ -144,12 +144,60 @@ export default function TeacherNotifications() {
                 }
                 break;
 
+            case 'NEW_EXAM':
+                title = '📝 Đề thi mới';
+                message = `Đề thi "${payload.examTitle || 'N/A'}" đã được tạo trong khóa học "${payload.courseTitle || 'N/A'}".`;
+                details = {
+                    course: payload.courseTitle,
+                    exam: payload.examTitle
+                };
+                if (payload.courseId) {
+                    actionUrl = `/teacher/classes`;
+                }
+                break;
+
             case 'NEW_LECTURE':
                 title = '📚 Bài giảng mới';
                 message = `Bài giảng "${payload.lectureTitle || 'N/A'}" đã được thêm vào khóa học "${payload.courseTitle || 'N/A'}".`;
                 details = {
                     course: payload.courseTitle,
                     lecture: payload.lectureTitle
+                };
+                if (payload.courseId) {
+                    actionUrl = `/teacher/classes`;
+                }
+                break;
+
+            case 'NEW_ASSIGNMENT':
+                title = '📋 Bài tập mới';
+                message = payload.message || `Bài tập mới đã được giao trong khóa học "${payload.courseTitle || 'N/A'}"`;
+                details = {
+                    course: payload.courseTitle,
+                    assignment: payload.assignmentTitle
+                };
+                if (payload.courseId) {
+                    actionUrl = `/teacher/assignments`;
+                }
+                break;
+
+            case 'ASSIGNMENT_GRADED':
+                title = '📊 Đã chấm bài tập';
+                message = `Bài tập "${payload.assignmentTitle || 'N/A'}" đã được chấm điểm.`;
+                details = {
+                    assignment: payload.assignmentTitle,
+                    score: payload.score ? `${payload.score} điểm` : null
+                };
+                if (payload.assignmentId) {
+                    actionUrl = `/teacher/assignments`;
+                }
+                break;
+
+            case 'SCHEDULE_REMINDER':
+                title = '⏰ Nhắc nhở lịch học';
+                message = payload.message || `Bạn có lịch học sắp tới. Hãy chuẩn bị sẵn sàng!`;
+                details = {
+                    course: payload.courseTitle,
+                    scheduleTime: payload.scheduleTime
                 };
                 if (payload.courseId) {
                     actionUrl = `/teacher/classes`;
@@ -163,7 +211,7 @@ export default function TeacherNotifications() {
                 break;
 
             default:
-                // Fallback cho các type khác
+                // Fallback cho các type khác hoặc custom notification
                 title = payload.title || payload.subject || 'Thông báo';
                 message = payload.message || payload.body || payload.content || '';
                 actionUrl = payload.action_url || null;
@@ -416,6 +464,16 @@ export default function TeacherNotifications() {
                                                     {item.details.wrong && (
                                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                                             ✗ {item.details.wrong}
+                                                        </span>
+                                                    )}
+                                                    {item.details.amount && (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                            💰 {item.details.amount}
+                                                        </span>
+                                                    )}
+                                                    {item.details.studentId && (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">
+                                                            👤 Học sinh: {item.details.studentId.substring(0, 8)}...
                                                         </span>
                                                     )}
                                                 </div>
