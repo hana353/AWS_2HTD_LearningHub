@@ -2,7 +2,7 @@
 // Controller để user tự quản lý profile của mình
 
 import { findUserByIdWithProfile, updateUserProfile } from '../models/user.model.js';
-import { getS3Url } from '../config/s3.js';
+import { generatePresignedDownloadUrl } from '../services/s3.service.js';
 import { successResponse } from '../utils/response.js';
 
 /**
@@ -27,12 +27,25 @@ export async function getMyProfile(req, res, next) {
       throw err;
     }
 
+    // Tạo presigned URL cho avatar nếu có (bucket private)
+    let avatarUrl = null;
+    if (user.avatar_s3_key) {
+      try {
+        avatarUrl = await generatePresignedDownloadUrl(user.avatar_s3_key, 3600); // 1 giờ
+      } catch (s3Error) {
+        console.error('Error generating presigned URL for avatar:', s3Error);
+        // Nếu lỗi, vẫn trả về null thay vì throw error
+        avatarUrl = null;
+      }
+    }
+
     return successResponse(res, {
       id: user.id,
       email: user.email,
       fullName: user.full_name || '',
       phone: user.phone || '',
-      avatar: user.avatar_s3_key ? getS3Url(user.avatar_s3_key) : null,
+      avatar: avatarUrl,
+      avatarS3Key: user.avatar_s3_key || null, // Giữ lại s3Key để có thể dùng sau
       bio: user.bio || '',
       roleName: req.user.roleName,
     });
@@ -64,12 +77,24 @@ export async function updateMyProfile(req, res, next) {
       avatar,
     });
 
+    // Tạo presigned URL cho avatar nếu có (bucket private)
+    let avatarUrl = null;
+    if (updated.avatar_s3_key) {
+      try {
+        avatarUrl = await generatePresignedDownloadUrl(updated.avatar_s3_key, 3600); // 1 giờ
+      } catch (s3Error) {
+        console.error('Error generating presigned URL for avatar:', s3Error);
+        avatarUrl = null;
+      }
+    }
+
     return successResponse(res, {
       id: updated.id,
       email: updated.email,
       fullName: updated.full_name || '',
       phone: updated.phone || '',
-      avatar: updated.avatar_s3_key ? getS3Url(updated.avatar_s3_key) : null,
+      avatar: avatarUrl,
+      avatarS3Key: updated.avatar_s3_key || null,
       bio: updated.bio || '',
     });
   } catch (err) {

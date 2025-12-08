@@ -22,11 +22,8 @@ export async function uploadLectureFile(file, courseId) {
   formData.append('courseId', courseId);
 
   try {
-    const res = await apiClient.post('/api/upload/lecture', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Không cần set headers, interceptor sẽ tự động xử lý FormData
+    const res = await apiClient.post('/api/upload/lecture', formData);
 
     const result = res.data;
     if (result && result.data) {
@@ -59,7 +56,7 @@ export async function uploadAvatar(file) {
   try {
     const res = await apiClient.post('/api/upload/avatar', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        // Không set Content-Type, để axios tự động set với boundary
       },
     });
 
@@ -92,11 +89,8 @@ export async function uploadFlashcardFile(file, setId) {
   formData.append('setId', setId);
 
   try {
-    const res = await apiClient.post('/api/upload/flashcard', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Không cần set headers, interceptor sẽ tự động xử lý FormData
+    const res = await apiClient.post('/api/upload/flashcard', formData);
 
     const result = res.data;
     if (result && result.data) {

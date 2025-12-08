@@ -10,9 +10,14 @@ const api = axios.create({
 
 // REQUEST INTERCEPTOR
 api.interceptors.request.use((config) => {
-  // Content-Type mặc định JSON
   if (!config.headers) config.headers = {};
-  config.headers["Content-Type"] = "application/json";
+  
+  // Chỉ set Content-Type JSON nếu không phải FormData
+  // FormData sẽ tự động set Content-Type với boundary
+  if (!(config.data instanceof FormData)) {
+    config.headers["Content-Type"] = "application/json";
+  }
+  // Nếu là FormData, không set Content-Type để browser tự động set với boundary
 
   // Gắn Bearer token nếu có
   const token =
