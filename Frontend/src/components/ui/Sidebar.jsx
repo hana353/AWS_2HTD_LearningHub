@@ -132,8 +132,11 @@ export default function Sidebar({
                             {menuItems.map((item) => {
                                 // Logic Active (Chung cho cả hai view)
                                 const isExactMatch = location.pathname === item.to;
-                                const isPrefixMatch = item.to !== '/member' && location.pathname.startsWith(item.to + '/');
-                                let isActive = (item.to === '/member') ? isExactMatch : (isExactMatch || isPrefixMatch);
+                                // Dashboard chính (/, /member, /teacher, /admin) chỉ exact match
+                                const isDashboardRoute = item.to === '/' || item.to === '/member' || item.to === '/teacher' || item.to === '/admin';
+                                // Các route con: exact match hoặc prefix match
+                                const isPrefixMatch = !isDashboardRoute && location.pathname.startsWith(item.to + '/');
+                                let isActive = isDashboardRoute ? isExactMatch : (isExactMatch || isPrefixMatch);
 
                                 const activeClasses = `${PRIMARY_BG} text-white font-semibold shadow-md`;
                                 const inactiveClasses = `text-gray-200 hover:bg-purple-700 hover:text-white`;
@@ -187,8 +190,11 @@ export default function Sidebar({
                             {menuItems.map((item) => {
                                 // Logic Active (Chung)
                                 const isExactMatch = location.pathname === item.to;
-                                const isPrefixMatch = item.to !== '/member' && location.pathname.startsWith(item.to + '/');
-                                let isActive = (item.to === '/member') ? isExactMatch : (isExactMatch || isPrefixMatch);
+                                // Dashboard chính (/, /member, /teacher, /admin) chỉ exact match
+                                const isDashboardRoute = item.to === '/' || item.to === '/member' || item.to === '/teacher' || item.to === '/admin';
+                                // Các route con: exact match hoặc prefix match
+                                const isPrefixMatch = !isDashboardRoute && location.pathname.startsWith(item.to + '/');
+                                let isActive = isDashboardRoute ? isExactMatch : (isExactMatch || isPrefixMatch);
 
                                 const activeClasses = `${PRIMARY_BG} text-white font-semibold shadow-md`;
                                 const inactiveClasses = `text-gray-200 hover:bg-purple-700 hover:text-white`;
