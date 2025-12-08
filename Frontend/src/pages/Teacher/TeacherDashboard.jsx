@@ -35,6 +35,7 @@ export default function TeacherDashboard() {
   const [classes, setClasses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [exams, setExams] = useState([]);
+  const [weeklyActivity, setWeeklyActivity] = useState([]);
 
   // Load data từ API
   useEffect(() => {
@@ -47,7 +48,7 @@ export default function TeacherDashboard() {
         const mappedClasses = (Array.isArray(coursesData) ? coursesData : []).map((course) => ({
           id: course.courseId,
           name: course.title || course.name,
-          students: 0, // TODO: Lấy từ API nếu có
+          students: course.students || 0,
           level: course.level || '',
           schedule: course.schedule || ''
         }));
@@ -60,12 +61,12 @@ export default function TeacherDashboard() {
           title: exam.title,
           classId: exam.course_id || null,
           duration: exam.duration_minutes || 0,
-          questions: 0, // TODO: Lấy từ API nếu có
+          questions: exam.questions_count || 0,
           published: exam.published || false
         }));
         setExams(mappedExams);
 
-        // Assignments - TODO: Cần API riêng hoặc tính từ exams
+        // Assignments - Load từ API nếu có
         setAssignments([]);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -90,8 +91,6 @@ export default function TeacherDashboard() {
     
     return { totalStudents, totalClasses, pendingTests, avgCompletion, totalSubmissions, totalRequired };
   }, [classes, assignments, exams]);
-
-  const weeklyActivity = [0, 0, 0, 0, 0, 0, 0]; // TODO: Lấy từ API nếu có
 
   // Xử lý sự kiện
   const publishExam = (id) => {
@@ -168,12 +167,8 @@ export default function TeacherDashboard() {
               className="pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-48 md:w-64 transition-all"
             />
           </div>
-          <button className="p-2 bg-white border border-gray-200 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition-colors relative">
+          <button className="p-2 bg-white border border-gray-200 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition-colors">
             <Bell size={20} />
-            <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-          </button>
-          <button className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition shadow-lg shadow-indigo-200" onClick={() => alert('Xuất báo cáo')}>
-            Export Report
           </button>
         </div>
       </header>
@@ -196,7 +191,6 @@ export default function TeacherDashboard() {
           value={stats.totalStudents}
           icon={<Users />}
           colorClass="bg-blue-500"
-          sub={<><ArrowUpRight size={14} className="text-green-500"/> <span className="text-green-600 font-medium">+12%</span> so với tháng trước</>}
           delay="delay-0"
         />
         <StatCard
@@ -204,7 +198,6 @@ export default function TeacherDashboard() {
           value={stats.totalClasses}
           icon={<Layers />}
           colorClass="bg-purple-500"
-          sub="Tất cả đều đang hoạt động"
           delay="delay-100"
         />
         <StatCard
@@ -268,7 +261,6 @@ export default function TeacherDashboard() {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {classes.map((cls) => {
-                     // Mock calculation for class specific progress
                      const clsAssignments = assignments.filter(a => a.classId === cls.id);
                      const clsSub = clsAssignments.reduce((acc, cur) => acc + cur.submissions, 0);
                      const clsTotal = clsAssignments.reduce((acc, cur) => acc + cur.total, 0);
@@ -325,27 +317,37 @@ export default function TeacherDashboard() {
                  <button className="p-1.5 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200"><Filter size={16}/></button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {assignments.map((a) => (
-                <div key={a.id} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all duration-300 group cursor-pointer">
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="px-2 py-1 rounded text-[10px] font-bold bg-white border border-gray-200 text-gray-500 uppercase tracking-wide group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
-                      {a.classId}
-                    </span>
-                    <span className="text-xs font-medium text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
-                      Hạn: {new Date(a.due).toLocaleDateString('vi-VN', {day: '2-digit', month: '2-digit'})}
-                    </span>
-                  </div>
-                  <h4 className="font-semibold text-gray-800 mb-1 line-clamp-1 group-hover:text-indigo-700">{a.title}</h4>
-                  <div className="flex items-center justify-between text-xs text-gray-500 mt-3">
-                    <span>{a.submissions} học viên đã nộp</span>
-                    <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
-                       <div className="h-full bg-indigo-500" style={{ width: `${(a.submissions/a.total)*100}%` }}></div>
+            {assignments.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {assignments.map((a) => (
+                  <div key={a.id} className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all duration-300 group cursor-pointer">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="px-2 py-1 rounded text-[10px] font-bold bg-white border border-gray-200 text-gray-500 uppercase tracking-wide group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:border-indigo-200 transition-colors">
+                        {a.classId || 'Chưa gán lớp'}
+                      </span>
+                      {a.due && (
+                        <span className="text-xs font-medium text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
+                          Hạn: {new Date(a.due).toLocaleDateString('vi-VN', {day: '2-digit', month: '2-digit'})}
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="font-semibold text-gray-800 mb-1 line-clamp-1 group-hover:text-indigo-700">{a.title}</h4>
+                    <div className="flex items-center justify-between text-xs text-gray-500 mt-3">
+                      <span>{a.submissions} học viên đã nộp</span>
+                      {a.total > 0 && (
+                        <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-500" style={{ width: `${(a.submissions/a.total)*100}%` }}></div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-400 text-sm">
+                Chưa có bài tập nào
+              </div>
+            )}
           </div>
 
         </div>
@@ -354,19 +356,21 @@ export default function TeacherDashboard() {
         <div className="space-y-8 animate-fade-in-up delay-300">
           
           {/* Weekly Activity Chart */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-             <div className="mb-6">
-               <h4 className="font-bold text-gray-800">Hoạt Động Tuần Này</h4>
-               <p className="text-xs text-gray-500">Số lượng tương tác & bài nộp</p>
-             </div>
-             <MiniBarChart data={weeklyActivity} />
-             <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between text-xs text-gray-500">
+          {weeklyActivity.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <div className="mb-6">
+                <h4 className="font-bold text-gray-800">Hoạt Động Tuần Này</h4>
+                <p className="text-xs text-gray-500">Số lượng tương tác & bài nộp</p>
+              </div>
+              <MiniBarChart data={weeklyActivity} />
+              <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between text-xs text-gray-500">
                 <span>Thứ 2</span>
                 <span>Thứ 4</span>
                 <span>Thứ 6</span>
                 <span>CN</span>
-             </div>
-          </div>
+              </div>
+            </div>
+          )}
 
           {/* Pending Exams */}
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -413,14 +417,6 @@ export default function TeacherDashboard() {
             </div>
           </div>
 
-          {/* Quick Tips */}
-          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-2xl border border-indigo-100">
-             <h4 className="font-bold text-indigo-900 text-sm mb-2">💡 Tips cho giảng viên</h4>
-             <ul className="text-xs text-indigo-800/80 space-y-2 leading-relaxed">
-               <li>• <strong>Khuyến khích:</strong> Nhắc nhở lớp CLS003 hoàn thành Mock Test trước thứ 6.</li>
-               <li>• <strong>Tối ưu:</strong> Sử dụng chấm điểm tự động cho các bài Reading để tiết kiệm thời gian.</li>
-             </ul>
-          </div>
 
         </div>
       </div>

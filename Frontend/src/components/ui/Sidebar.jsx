@@ -40,7 +40,6 @@ export const adminMenuItems = [
     { label: 'Tổng quan', to: '/admin', icon: LayoutDashboard },
     { label: 'Người dùng', to: '/admin/users', icon: Users },         // Trang quản lý User
     { label: 'Khóa học', to: '/admin/courses', icon: BookOpen },      // Trang quản lý Khóa học
-    { label: 'Thông báo', to: '/admin/notifications', icon: Bell },
 ];
 
 // --- CONFIG CHUNG ---

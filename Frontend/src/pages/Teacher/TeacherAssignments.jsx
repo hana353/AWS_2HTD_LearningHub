@@ -807,15 +807,6 @@ export default function TeacherAssignments() {
                                     <button 
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            // TODO: Implement view results functionality
-                                        }}
-                                        className="flex-1 py-2.5 bg-gradient-to-r from-gray-50 to-gray-100 text-gray-700 font-medium rounded-lg hover:from-gray-100 hover:to-gray-200 transition-all duration-200 text-sm flex justify-center items-center gap-2 shadow-sm hover:shadow-md"
-                                    >
-                                        Xem kết quả <ChevronRight size={16} />
-                                    </button>
-                                    <button 
-                                        onClick={(e) => {
-                                            e.stopPropagation();
                                             if (window.confirm("Bạn có chắc muốn hủy giao đề thi này?")) {
                                                 handlePublishExam(item.id, item.status);
                                             }
