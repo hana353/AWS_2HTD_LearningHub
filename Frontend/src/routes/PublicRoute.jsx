@@ -19,6 +19,7 @@ import {
 import AdminDashboard from "../pages/Admin/AdminDashboard";
 import AdminUsers from "../pages/Admin/AdminUsers"; // Giả sử bạn lưu ở đây
 import AdminCourses from "../pages/Admin/AdminCourses";
+import AdminNotifications from "../pages/Admin/AdminNotifications";
 // Member
 import MemberDashboard from "../pages/Member/MemberDashboard";
 import Courses from "../pages/Member/Courses";
@@ -36,6 +37,7 @@ import TeacherClasses from "../pages/Teacher/TeacherClasses";
 import TeacherAssignments from "../pages/Teacher/TeacherAssignments";
 import TeacherQuiz from "../pages/Teacher/TeacherQuiz";
 import TeacherSettings from "../pages/Teacher/TeacherSettings";
+import TeacherNotifications from "../pages/Teacher/TeacherNotifications";
 // Routes Protection
 import PrivateRoute from "./PrivateRoute";
 
@@ -101,6 +103,7 @@ const routes = createBrowserRouter([
       { path: "classes", element: <TeacherClasses /> },
       { path: "assignments", element: <TeacherAssignments /> },
       { path: "quiz", element: <TeacherQuiz /> },
+      { path: "notifications", element: <TeacherNotifications /> },
       { path: "settings", element: <TeacherSettings /> },
       { path: "*", element: <Navigate to="/teacher" replace /> },
     ],
@@ -118,7 +121,7 @@ const routes = createBrowserRouter([
       { index: true, element: <AdminDashboard /> },
       { path: "users", element: <AdminUsers /> },
       { path: "courses", element: <AdminCourses /> },
-
+      { path: "notifications", element: <AdminNotifications /> },
       { path: "*", element: <Navigate to="/admin" replace /> },
     ],
   },

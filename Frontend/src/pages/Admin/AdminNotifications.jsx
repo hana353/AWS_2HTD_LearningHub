@@ -1,4 +1,4 @@
-// File: src/pages/Member/MemberNotifications.jsx
+// File: src/pages/Admin/AdminNotifications.jsx
 
 import React, { useState, useEffect } from 'react';
 import { 
@@ -9,7 +9,7 @@ import {
 import { getMyNotifications, markNotificationRead, markAllNotificationsRead } from '../../services/notificationService';
 import { toast } from 'react-toastify';
 
-export default function MemberNotifications() {
+export default function AdminNotifications() {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all');
@@ -28,10 +28,8 @@ export default function MemberNotifications() {
                 });
                 
                 // Map dữ liệu từ API sang format của component
-                // Backend trả về: { items: [{ id, type, payload (JSON), isRead, createdAt }], pagination: {...} }
                 const notificationsList = result.notifications || [];
                 const mappedNotifications = notificationsList.map((notif) => {
-                    // payload là JSON string đã được parse thành object
                     const payload = notif.payload || {};
                     const type = notif.type || 'info';
                     
@@ -45,10 +43,10 @@ export default function MemberNotifications() {
                         message: message,
                         time: formatTimeAgo(notif.createdAt),
                         isRead: notif.isRead || false,
-                        action: null, // Không hiển thị nút "Xem chi tiết" vì đã có thông tin chi tiết
+                        action: null,
                         actionUrl: actionUrl || null,
-                        details: details, // Thông tin chi tiết
-                        payload: payload // Giữ lại payload để có thể dùng sau
+                        details: details,
+                        payload: payload
                     };
                 });
                 
@@ -89,157 +87,32 @@ export default function MemberNotifications() {
         return date.toLocaleDateString('vi-VN');
     };
 
-    // Helper: Format nội dung thông báo dựa trên type và payload
+    // Helper: Format nội dung thông báo dựa trên type và payload (điều chỉnh cho Admin)
     const formatNotificationContent = (type, payload) => {
         let title = 'Thông báo';
         let message = '';
         let actionUrl = null;
-        let details = null; // Thông tin chi tiết để hiển thị thêm
+        let details = null;
 
         switch (type) {
-            case 'NEW_EXAM':
-                title = '📝 Đề thi mới';
-                message = `Đề thi "${payload.examTitle || 'N/A'}" đã được tạo trong khóa học "${payload.courseTitle || 'N/A'}". Hãy kiểm tra và làm bài thi ngay!`;
+            case 'NEW_USER':
+                title = '👤 Người dùng mới';
+                message = `Có người dùng mới đăng ký trong hệ thống.`;
                 details = {
-                    course: payload.courseTitle,
-                    exam: payload.examTitle
+                    userId: payload.userId,
+                    userName: payload.userName
                 };
-                if (payload.courseId) {
-                    actionUrl = `/member/courses/${payload.courseId}`;
-                }
+                actionUrl = `/admin/users`;
                 break;
 
-            case 'EXAM_RESULT':
-                title = '✅ Kết quả thi';
-                const score = payload.totalScore || 0;
-                const summary = payload.summary || {};
-                const totalQuestions = summary.totalQuestions || 1;
-                const correctAnswers = summary.correctAnswers || 0;
-                const wrongAnswers = summary.wrongAnswers || 0;
-                const percentage = Math.round((score / totalQuestions) * 100);
-                
-                message = `Bạn đã hoàn thành đề thi "${payload.examTitle || 'N/A'}" trong khóa học "${payload.courseTitle || 'N/A'}".`;
-                details = {
-                    score: `${score}/${totalQuestions} điểm`,
-                    percentage: `${percentage}%`,
-                    correct: `Đúng: ${correctAnswers}/${totalQuestions} câu`,
-                    wrong: wrongAnswers > 0 ? `Sai: ${wrongAnswers} câu` : null,
-                    course: payload.courseTitle,
-                    exam: payload.examTitle
-                };
-                if (payload.examId) {
-                    actionUrl = `/member/exams/${payload.examId}/results`;
-                }
-                break;
-
-            case 'NEW_LECTURE':
-                title = '📚 Bài giảng mới';
-                message = `Bài giảng "${payload.lectureTitle || 'N/A'}" đã được thêm vào khóa học "${payload.courseTitle || 'N/A'}". Hãy xem ngay!`;
+            case 'NEW_COURSE':
+                title = '📚 Khóa học mới';
+                message = `Khóa học "${payload.courseTitle || 'N/A'}" đã được tạo.`;
                 details = {
                     course: payload.courseTitle,
-                    lecture: payload.lectureTitle
+                    courseId: payload.courseId
                 };
-                if (payload.courseId) {
-                    actionUrl = `/member/courses/${payload.courseId}`;
-                }
-                break;
-
-            case 'COURSE_ENROLL':
-                title = '🎓 Đã đăng ký khóa học';
-                message = `Bạn đã đăng ký thành công khóa học "${payload.courseTitle || 'N/A'}". Chúc bạn học tập hiệu quả!`;
-                details = {
-                    course: payload.courseTitle,
-                    enrollmentId: payload.enrollmentId
-                };
-                if (payload.courseId) {
-                    actionUrl = `/member/courses/${payload.courseId}`;
-                }
-                break;
-
-            case 'NEW_ENROLLMENT':
-                title = '👤 Học sinh mới đăng ký';
-                message = `Có học sinh mới đăng ký khóa học "${payload.courseTitle || 'N/A'}".`;
-                details = {
-                    course: payload.courseTitle,
-                    studentId: payload.studentId
-                };
-                if (payload.courseId) {
-                    actionUrl = `/teacher/courses/${payload.courseId}`;
-                }
-                break;
-
-            case 'NEW_SUBMISSION':
-                title = '📤 Bài nộp mới';
-                message = `Có học sinh mới nộp bài cho đề thi "${payload.examTitle || 'N/A'}" trong khóa học "${payload.courseTitle || 'N/A'}". Hãy chấm điểm ngay!`;
-                details = {
-                    course: payload.courseTitle,
-                    exam: payload.examTitle,
-                    studentId: payload.studentId,
-                    score: payload.totalScore ? `${payload.totalScore} điểm` : null
-                };
-                if (payload.examId) {
-                    actionUrl = `/teacher/exams/${payload.examId}/submissions`;
-                }
-                break;
-
-            case 'NEW_ASSIGNMENT':
-                title = '📋 Bài tập mới';
-                message = payload.message || `Bài tập mới đã được giao trong khóa học "${payload.courseTitle || 'N/A'}"`;
-                details = {
-                    course: payload.courseTitle,
-                    assignment: payload.assignmentTitle
-                };
-                if (payload.courseId) {
-                    actionUrl = `/member/courses/${payload.courseId}`;
-                }
-                break;
-
-            case 'ASSIGNMENT_GRADED':
-                title = '📊 Đã chấm bài tập';
-                message = `Bài tập "${payload.assignmentTitle || 'N/A'}" của bạn đã được chấm điểm. Hãy xem kết quả!`;
-                details = {
-                    assignment: payload.assignmentTitle,
-                    score: payload.score ? `${payload.score} điểm` : null
-                };
-                if (payload.assignmentId) {
-                    actionUrl = `/member/assignments/${payload.assignmentId}`;
-                }
-                break;
-
-            case 'PAYMENT_SUCCESS':
-                title = '💳 Thanh toán thành công';
-                message = `Thanh toán cho khóa học "${payload.courseTitle || 'N/A'}" đã thành công. Cảm ơn bạn!`;
-                details = {
-                    course: payload.courseTitle,
-                    amount: payload.amount ? `${payload.amount.toLocaleString('vi-VN')} VNĐ` : null
-                };
-                if (payload.courseId) {
-                    actionUrl = `/member/courses/${payload.courseId}`;
-                }
-                break;
-
-            case 'PAYMENT_FAILED':
-                title = '❌ Thanh toán thất bại';
-                message = `Thanh toán cho khóa học "${payload.courseTitle || 'N/A'}" không thành công. Vui lòng thử lại.`;
-                details = {
-                    course: payload.courseTitle,
-                    paymentId: payload.paymentId
-                };
-                if (payload.courseId) {
-                    actionUrl = `/member/payment/${payload.paymentId || ''}`;
-                }
-                break;
-
-            case 'SCHEDULE_REMINDER':
-                title = '⏰ Nhắc nhở lịch học';
-                message = payload.message || `Bạn có lịch học sắp tới. Hãy chuẩn bị sẵn sàng!`;
-                details = {
-                    course: payload.courseTitle,
-                    scheduleTime: payload.scheduleTime
-                };
-                if (payload.courseId) {
-                    actionUrl = `/member/courses/${payload.courseId}`;
-                }
+                actionUrl = `/admin/courses`;
                 break;
 
             case 'URGENT':
@@ -249,7 +122,7 @@ export default function MemberNotifications() {
                 break;
 
             default:
-                // Fallback cho các type khác hoặc custom notification
+                // Fallback cho các type khác
                 title = payload.title || payload.subject || 'Thông báo';
                 message = payload.message || payload.body || payload.content || '';
                 actionUrl = payload.action_url || null;
@@ -261,7 +134,7 @@ export default function MemberNotifications() {
 
     // --- HELPER FUNCTIONS ---
 
-    // 1. Icon Mapping - Map theo type từ backend
+    // 1. Icon Mapping
     const getIcon = (type) => {
         switch (type) {
             case 'URGENT':
@@ -286,8 +159,11 @@ export default function MemberNotifications() {
                 return <FileText size={24} />;
             case 'COURSE_ENROLL':
             case 'NEW_ENROLLMENT':
+            case 'NEW_USER':
             case 'discussion': 
                 return <MessageCircle size={24} />;
+            case 'NEW_COURSE':
+                return <FileText size={24} />;
             case 'promotion': 
                 return <Zap size={24} />;
             case 'system': 
@@ -297,7 +173,7 @@ export default function MemberNotifications() {
         }
     };
 
-    // 2. Color Mapping (Background & Text) - Map theo type từ backend
+    // 2. Color Mapping
     const getStyle = (type) => {
         switch (type) {
             case 'URGENT':
@@ -322,8 +198,11 @@ export default function MemberNotifications() {
                 return 'bg-blue-100 text-blue-600 ring-4 ring-blue-50';
             case 'COURSE_ENROLL':
             case 'NEW_ENROLLMENT':
+            case 'NEW_USER':
             case 'discussion': 
                 return 'bg-pink-100 text-pink-600 ring-4 ring-pink-50';
+            case 'NEW_COURSE':
+                return 'bg-blue-100 text-blue-600 ring-4 ring-blue-50';
             case 'promotion': 
                 return 'bg-yellow-100 text-yellow-600 ring-4 ring-yellow-50';
             default: 
@@ -335,7 +214,7 @@ export default function MemberNotifications() {
     const markAsRead = async (id) => {
         try {
             await markNotificationRead(id);
-        setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
+            setNotifications(notifications.map(n => n.id === id ? { ...n, isRead: true } : n));
         } catch (error) {
             console.error('Error marking notification as read:', error);
             toast.error('Không thể đánh dấu đã đọc');
@@ -345,7 +224,7 @@ export default function MemberNotifications() {
     const markAllRead = async () => {
         try {
             await markAllNotificationsRead();
-        setNotifications(notifications.map(n => ({ ...n, isRead: true })));
+            setNotifications(notifications.map(n => ({ ...n, isRead: true })));
             toast.success('Đã đánh dấu tất cả là đã đọc');
         } catch (error) {
             console.error('Error marking all as read:', error);
@@ -357,7 +236,6 @@ export default function MemberNotifications() {
     const filteredList = notifications.filter(n => {
         if (filter === 'all') return true;
         if (filter === 'unread') return !n.isRead;
-        // Gom nhóm các loại khác nhau vào 1 tab 'system' nếu muốn, hoặc filter chính xác
         return n.type === filter;
     });
 
@@ -376,7 +254,7 @@ export default function MemberNotifications() {
                         <h1 className="text-3xl font-extrabold mb-2 flex items-center gap-3">
                             Thông báo <span className="bg-white/20 px-3 py-1 rounded-lg text-sm font-medium backdrop-blur-md">{notifications.length} tin</span>
                         </h1>
-                        <p className="text-indigo-100 opacity-90">Đừng bỏ lỡ các tin tức quan trọng và lịch học sắp tới.</p>
+                        <p className="text-indigo-100 opacity-90">Quản lý và theo dõi các thông báo hệ thống.</p>
                     </div>
 
                     <div className="flex gap-4 bg-white/10 backdrop-blur-md p-1 rounded-2xl border border-white/20">
@@ -395,9 +273,7 @@ export default function MemberNotifications() {
                     {[
                         { key: 'all', label: 'Tất cả' },
                         { key: 'unread', label: 'Chưa đọc' },
-                        { key: 'urgent', label: 'Quan trọng' },
-                        { key: 'schedule', label: 'Lịch học' },
-                        { key: 'payment', label: 'Tài chính' }
+                        { key: 'urgent', label: 'Quan trọng' }
                     ].map(tab => (
                         <button
                             key={tab.key}
@@ -452,7 +328,7 @@ export default function MemberNotifications() {
                                 </div>
 
                                 {/* Content Body */}
-                                <div className="flex-1 min-w-0"> {/* min-w-0 giúp text truncate hoạt động tốt */}
+                                <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-start gap-4">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 mb-1">
@@ -476,39 +352,9 @@ export default function MemberNotifications() {
                                                             📚 {item.details.course}
                                                         </span>
                                                     )}
-                                                    {item.details.exam && (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                                            📝 {item.details.exam}
-                                                        </span>
-                                                    )}
-                                                    {item.details.lecture && (
+                                                    {item.details.userName && (
                                                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                            📖 {item.details.lecture}
-                                                        </span>
-                                                    )}
-                                                    {item.details.score && (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                            ⭐ {item.details.score}
-                                                        </span>
-                                                    )}
-                                                    {item.details.percentage && (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                                            📊 {item.details.percentage}
-                                                        </span>
-                                                    )}
-                                                    {item.details.correct && (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-                                                            ✓ {item.details.correct}
-                                                        </span>
-                                                    )}
-                                                    {item.details.wrong && (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                            ✗ {item.details.wrong}
-                                                        </span>
-                                                    )}
-                                                    {item.details.amount && (
-                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                                            💰 {item.details.amount}
+                                                            👤 {item.details.userName}
                                                         </span>
                                                     )}
                                                 </div>
@@ -564,7 +410,6 @@ export default function MemberNotifications() {
                                     const payload = notif.payload || {};
                                     const type = notif.type || 'info';
                                     
-                                    // Sử dụng cùng formatNotificationContent function
                                     const { title, message, actionUrl, details } = formatNotificationContent(type, payload);
                                     
                                     return {
@@ -574,7 +419,7 @@ export default function MemberNotifications() {
                                         message: message,
                                         time: formatTimeAgo(notif.createdAt),
                                         isRead: notif.isRead || false,
-                                        action: null, // Không hiển thị nút "Xem chi tiết" vì đã có thông tin chi tiết
+                                        action: null,
                                         actionUrl: actionUrl || null,
                                         details: details,
                                         payload: payload
@@ -584,7 +429,6 @@ export default function MemberNotifications() {
                                 setNotifications([...notifications, ...mappedNotifications]);
                                 setPage(nextPage);
                                 
-                                // Tính hasMore
                                 const total = result.pagination?.total || 0;
                                 const currentPage = result.pagination?.page || nextPage;
                                 const pageSize = result.pagination?.pageSize || 20;

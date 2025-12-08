@@ -33,12 +33,14 @@ export const teacherMenuItems = [
     { label: 'Quản lý Lớp học', to: '/teacher/classes', icon: Users },
     { label: 'Quản lý Bài tập', to: '/teacher/assignments', icon: FileText },
     { label: 'Bài tập Flashcard', to: '/teacher/quiz', icon: Brain },
+    { label: 'Thông báo', to: '/teacher/notifications', icon: Bell },
     { label: 'Cài đặt', to: '/teacher/settings', icon: Settings },
 ];
 export const adminMenuItems = [
     { label: 'Tổng quan', to: '/admin', icon: LayoutDashboard },
     { label: 'Người dùng', to: '/admin/users', icon: Users },         // Trang quản lý User
     { label: 'Khóa học', to: '/admin/courses', icon: BookOpen },      // Trang quản lý Khóa học
+    { label: 'Thông báo', to: '/admin/notifications', icon: Bell },
 ];
 
 // --- CONFIG CHUNG ---

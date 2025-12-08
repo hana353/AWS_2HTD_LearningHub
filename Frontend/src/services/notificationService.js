@@ -23,7 +23,18 @@ export async function getMyNotifications(params = {}) {
       throw new Error(result.message || 'Failed to fetch notifications');
     }
 
-    return result.data || result;
+    // Backend trả về: { success: true, message: "...", data: { items: [...], pagination: {...} } }
+    const data = result.data || result;
+    
+    // Backend service trả về: { items: [...], pagination: { page, pageSize, total } }
+    return {
+      notifications: data.items || [],
+      pagination: data.pagination || {
+        page: params.page || 1,
+        pageSize: params.pageSize || 20,
+        total: 0
+      }
+    };
   } catch (error) {
     throw error;
   }
