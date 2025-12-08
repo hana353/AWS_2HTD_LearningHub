@@ -243,7 +243,7 @@ export default function RegisterPage() {
                         <div className="flex items-center text-sm pt-2">
                             <input type="checkbox" id="terms" className="w-4 h-4 text-purple-600" required />
                             <label htmlFor="terms" className="ml-2 text-gray-600">
-                                Tôi đồng ý với <a href="#" className={`${primaryText} font-semibold`}>Điều khoản sử dụng</a>
+                                Tôi xác nhận các thông tin đã điền là đúng
                             </label>
                         </div>
 

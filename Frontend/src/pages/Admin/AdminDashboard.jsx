@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    Users, BookOpen, GraduationCap, Calendar, 
-    ArrowUpRight, ArrowDownRight, ChevronLeft, ChevronRight
+    Users, BookOpen, GraduationCap, 
+    ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 
 // [FIX] Sửa lại tên hàm import đúng với adminService.js (getAdminCourses thay vì getCourses)
@@ -36,51 +36,6 @@ const styles = `
   }
 `;
 
-// --- COMPONENT CHART GIẢ LẬP ---
-const ModernBarChart = () => (
-    <div className="flex items-end justify-between h-64 w-full gap-2 mt-4 px-2">
-        {[45, 67, 89, 54, 78, 92, 65, 88, 76, 54, 87, 95].map((h, i) => (
-            <div key={i} className="flex flex-col items-center gap-2 group w-full">
-                <div className="relative w-full flex items-end justify-center h-full overflow-hidden rounded-t-lg bg-gray-50">
-                    <div 
-                        style={{ height: `${h}%` }} 
-                        className={`w-4/5 rounded-t-lg transition-all duration-1000 ease-out group-hover:opacity-90 animate-grow 
-                        ${i % 2 === 0 ? 'bg-[#5a4d8c]' : 'bg-[#8d7fbf]'}`}
-                    ></div>
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
-                        {h * 12} visitors
-                    </div>
-                </div>
-                <span className="text-xs text-gray-400 font-medium">T{i + 1}</span>
-            </div>
-        ))}
-    </div>
-);
-
-const DonutChart = ({ pass, fail }) => {
-    const total = pass + fail;
-    const passPercent = (pass / total) * 100;
-    
-    return (
-        <div className="relative w-48 h-48 flex items-center justify-center">
-            <svg viewBox="0 0 36 36" className="w-full h-full rotate-[-90deg]">
-                <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f3f4f6" strokeWidth="4" />
-                <path 
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" 
-                    fill="none" 
-                    stroke="#5a4d8c" 
-                    strokeWidth="4" 
-                    strokeDasharray={`${passPercent}, 100`}
-                    className="animate-[dash_1.5s_ease-out_forwards]"
-                />
-            </svg>
-            <div className="absolute flex flex-col items-center animate-fade-in-up">
-                <span className="text-3xl font-bold text-gray-800">{Math.round(passPercent)}%</span>
-                <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Tỷ lệ đậu</span>
-            </div>
-        </div>
-    );
-};
 
 // --- COMPONENT CHÍNH ---
 export default function AdminDashboard() {
@@ -91,19 +46,6 @@ export default function AdminDashboard() {
     });
     const [loading, setLoading] = useState(true);
 
-    // Selected month for the dashboard (editable via prev/next)
-    const [selectedDate, setSelectedDate] = useState(new Date());
-    const monthLabel = `Tháng ${selectedDate.getMonth() + 1}/${selectedDate.getFullYear()}`;
-
-    const prevMonth = () => {
-        const d = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
-        setSelectedDate(d);
-    };
-
-    const nextMonth = () => {
-        const d = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1);
-        setSelectedDate(d);
-    };
 
    useEffect(() => {
         async function fetchDashboardData() {
@@ -190,19 +132,6 @@ export default function AdminDashboard() {
                     <h1 className="text-3xl font-extrabold text-gray-800 tracking-tight">Tổng Quan</h1>
                     <p className="text-gray-500 mt-1 font-medium">Chào mừng trở lại, Administrator!</p>
                 </div>
-                
-                <div className="flex gap-3 mt-4 md:mt-0">
-                    <div className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-600 rounded-xl transition shadow-sm font-medium text-sm">
-                        <button onClick={prevMonth} aria-label="Tháng trước" className="p-1 rounded hover:bg-gray-100">
-                            <ChevronLeft size={16} />
-                        </button>
-                        <Calendar size={18} />
-                        <span className="font-medium px-2">{monthLabel}</span>
-                        <button onClick={nextMonth} aria-label="Tháng sau" className="p-1 rounded hover:bg-gray-100">
-                            <ChevronRight size={16} />
-                        </button>
-                    </div>
-                </div>
             </div>
 
             {/* STAT CARDS */}
@@ -234,45 +163,6 @@ export default function AdminDashboard() {
                 ))}
             </div>
 
-            {/* CHARTS SECTION */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* 1. CHART: Thống kê truy cập */}
-                <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-gray-100 shadow-sm animate-fade-in-up delay-200 flex flex-col">
-                    <div className="flex justify-between items-center mb-6">
-                        <div>
-                            <h2 className="text-xl font-bold text-gray-800">Lượt truy cập hệ thống</h2>
-                            <p className="text-sm text-gray-500 mt-1">Số liệu thống kê theo thời gian thực</p>
-                        </div>
-                        <div className="flex bg-gray-50 p-1 rounded-lg">
-                            <button className="px-3 py-1 bg-white shadow-sm rounded-md text-xs font-medium text-gray-800">7 ngày</button>
-                            <button className="px-3 py-1 rounded-md text-xs font-medium text-gray-500 hover:text-gray-700">30 ngày</button>
-                            <button className="px-3 py-1 rounded-md text-xs font-medium text-gray-500 hover:text-gray-700">1 năm</button>
-                        </div>
-                    </div>
-                    
-                    <div className="w-full">
-                        <ModernBarChart />
-                    </div>
-                </div>
-
-                {/* 2. CHART: Tỉ lệ Đậu/Rớt */}
-                <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm animate-fade-in-up hover:shadow-md transition-shadow duration-300 delay-300 flex flex-col">
-                    <div className="mb-2">
-                        <h2 className="text-xl font-bold text-gray-800">Chất lượng đào tạo</h2>
-                        <p className="text-sm text-gray-500 mt-1">Kết quả bài thi cuối khóa toàn hệ thống</p>
-                    </div>
-                    
-                    <div className="flex-1 flex items-center justify-center">
-                        <DonutChart pass={1560} fail={340} />
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                        <button className="w-full py-2.5 rounded-xl border border-indigo-100 text-[#5a4d8c] bg-indigo-50 font-semibold text-sm hover:bg-[#5a4d8c] hover:text-white transition-all">
-                            Xem báo cáo chi tiết
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 }
