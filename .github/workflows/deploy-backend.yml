@@ -40,3 +40,4 @@ jobs:
     - name: Deploy to Lambda
       run: |
         aws lambda update-function-code --function-name learninghub-backend --zip-file fileb://Backend/function.zip
+//test to deploy lên lambda
