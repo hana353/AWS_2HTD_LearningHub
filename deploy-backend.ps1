@@ -17,9 +17,9 @@ if ($args -contains "--force-install" -or $args -contains "-f") {
 Write-Host "Checking AWS CLI..." -ForegroundColor Yellow
 try {
     $awsVersion = aws --version 2>&1
-    Write-Host "✓ AWS CLI found: $awsVersion" -ForegroundColor Green
+    Write-Host "[OK] AWS CLI found: $awsVersion" -ForegroundColor Green
 } catch {
-    Write-Host "✗ AWS CLI not found. Please install AWS CLI first." -ForegroundColor Red
+    Write-Host "[ERROR] AWS CLI not found. Please install AWS CLI first." -ForegroundColor Red
     exit 1
 }
 
@@ -29,15 +29,15 @@ try {
     $awsIdentity = aws sts get-caller-identity --region $Region 2>&1
     if ($LASTEXITCODE -eq 0) {
         $identityObj = $awsIdentity | ConvertFrom-Json
-        Write-Host "✓ AWS credentials valid" -ForegroundColor Green
+        Write-Host "[OK] AWS credentials valid" -ForegroundColor Green
         Write-Host "  Account: $($identityObj.Account)" -ForegroundColor Gray
         Write-Host "  User/Role: $($identityObj.Arn)" -ForegroundColor Gray
     } else {
-        Write-Host "✗ AWS credentials not configured. Run 'aws configure' first." -ForegroundColor Red
+        Write-Host "[ERROR] AWS credentials not configured. Run 'aws configure' first." -ForegroundColor Red
         exit 1
     }
 } catch {
-    Write-Host "✗ Failed to verify AWS credentials: $_" -ForegroundColor Red
+    Write-Host "[ERROR] Failed to verify AWS credentials: $_" -ForegroundColor Red
     exit 1
 }
 
@@ -45,9 +45,9 @@ try {
 Write-Host "Checking Node.js..." -ForegroundColor Yellow
 try {
     $nodeVersion = node --version
-    Write-Host "✓ Node.js found: $nodeVersion" -ForegroundColor Green
+    Write-Host "[OK] Node.js found: $nodeVersion" -ForegroundColor Green
 } catch {
-    Write-Host "✗ Node.js not found. Please install Node.js first." -ForegroundColor Red
+    Write-Host "[ERROR] Node.js not found. Please install Node.js first." -ForegroundColor Red
     exit 1
 }
 
@@ -71,13 +71,13 @@ if ($ForceInstall -or -not (Test-Path "node_modules")) {
     Write-Host "Running npm install..." -ForegroundColor Yellow
     npm install --production
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "✗ npm install failed!" -ForegroundColor Red
+        Write-Host "[ERROR] npm install failed!" -ForegroundColor Red
         Set-Location ..
         exit 1
     }
-    Write-Host "✓ Dependencies installed successfully" -ForegroundColor Green
+    Write-Host "[OK] Dependencies installed successfully" -ForegroundColor Green
 } else {
-    Write-Host "✓ node_modules exists, skipping npm install" -ForegroundColor Green
+    Write-Host "[OK] node_modules exists, skipping npm install" -ForegroundColor Green
     Write-Host "  (Use --force-install to reinstall)" -ForegroundColor Gray
 }
 
@@ -98,7 +98,7 @@ $itemsToZip = @(
 # Kiểm tra các file/folder tồn tại
 foreach ($item in $itemsToZip) {
     if (-not (Test-Path $item)) {
-        Write-Host "✗ Missing required file/folder: $item" -ForegroundColor Red
+        Write-Host "[ERROR] Missing required file/folder: $item" -ForegroundColor Red
         Set-Location ..
         exit 1
     }
@@ -110,10 +110,11 @@ Compress-Archive -Path $itemsToZip -DestinationPath "function.zip" -Force
 # Kiểm tra file size (Lambda limit: 50MB zipped, 250MB unzipped)
 $zipFile = Get-Item "function.zip"
 $zipSizeMB = [math]::Round($zipFile.Length / 1MB, 2)
-Write-Host "✓ Package created: $($zipFile.Name) ($zipSizeMB MB)" -ForegroundColor Green
+Write-Host "[OK] Package created: $($zipFile.Name) ($zipSizeMB MB)" -ForegroundColor Green
 
 if ($zipSizeMB -gt 50) {
-    Write-Host "⚠ WARNING: Package size ($zipSizeMB MB) exceeds Lambda's 50MB limit!" -ForegroundColor Yellow
+    $warningMsg = "[WARNING] Package size ($zipSizeMB MB) exceeds Lambda's 50MB limit!"
+    Write-Host $warningMsg -ForegroundColor Yellow
     Write-Host "  Consider using Lambda Layers or S3 deployment." -ForegroundColor Yellow
 }
 
@@ -133,7 +134,8 @@ try {
         Write-Host "Function Details:" -ForegroundColor Cyan
         Write-Host "  Name: $FunctionName" -ForegroundColor White
         Write-Host "  Region: $Region" -ForegroundColor White
-        Write-Host "  Package size: $zipSizeMB MB" -ForegroundColor White
+        $sizeMsg = "  Package size: $zipSizeMB MB"
+        Write-Host $sizeMsg -ForegroundColor White
         Write-Host ""
         
         # Lấy thông tin Lambda function
@@ -147,10 +149,19 @@ try {
             
             if ($LASTEXITCODE -eq 0) {
                 $info = $lambdaInfo -split "`t"
-                Write-Host "  Runtime: $($info[0])" -ForegroundColor White
-                Write-Host "  Memory: $($info[1]) MB" -ForegroundColor White
-                Write-Host "  Timeout: $($info[2]) seconds" -ForegroundColor White
-                Write-Host "  Last Modified: $($info[3])" -ForegroundColor White
+                if ($info.Length -gt 0) {
+                    Write-Host "  Runtime: $($info[0])" -ForegroundColor White
+                }
+                if ($info.Length -gt 1) {
+                    $memoryMsg = "  Memory: $($info[1]) MB"
+                    Write-Host $memoryMsg -ForegroundColor White
+                }
+                if ($info.Length -gt 2) {
+                    Write-Host "  Timeout: $($info[2]) seconds" -ForegroundColor White
+                }
+                if ($info.Length -gt 3) {
+                    Write-Host "  Last Modified: $($info[3])" -ForegroundColor White
+                }
             }
         } catch {
             Write-Host "  (Could not fetch function details)" -ForegroundColor Gray
@@ -166,11 +177,11 @@ try {
         Write-Host "  3. Test API Gateway endpoint" -ForegroundColor White
         Write-Host ""
     } else {
-        Write-Host "`n✗ Deploy failed!" -ForegroundColor Red
+        Write-Host "`n[ERROR] Deploy failed!" -ForegroundColor Red
         Write-Host "Check the error message above for details." -ForegroundColor Yellow
         exit 1
     }
 } catch {
-    Write-Host "`n✗ Error deploying to Lambda: $_" -ForegroundColor Red
+    Write-Host "`n[ERROR] Error deploying to Lambda: $_" -ForegroundColor Red
     exit 1
 }
