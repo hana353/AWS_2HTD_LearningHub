@@ -34,8 +34,9 @@ const corsOptions = {
       'http://localhost:5174',
       'https://2htdlearninghub.xyz',
       'https://www.2htdlearninghub.xyz',
-      // Vercel preview URLs pattern
+      // Vercel production and preview URLs
       /^https:\/\/.*\.vercel\.app$/,
+      /^https:\/\/.*-.*\.vercel\.app$/, // Preview deployments
       // Local development pattern
       /^http:\/\/localhost:\d+$/,
     ].filter(Boolean);
