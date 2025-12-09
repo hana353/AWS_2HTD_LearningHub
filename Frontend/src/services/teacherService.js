@@ -162,7 +162,9 @@ export async function getExamQuestions(examId) {
       throw new Error(result.message || "Failed to fetch exam questions");
     }
 
-    return result.data ?? [];
+    // Đảm bảo luôn trả về một mảng
+    const data = result.data ?? result ?? [];
+    return Array.isArray(data) ? data : [];
   } catch (error) {
     throw error;
   }
