@@ -6,7 +6,7 @@
 // Không import server.js ở đây vì Lambda không cần start HTTP server
 
 import serverless from 'serverless-http';
-import app from './app.js';
+import app from './src/app.js';
 
 // Wrap Express app với serverless-http
 export const handler = serverless(app, {

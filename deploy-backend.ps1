@@ -90,6 +90,7 @@ if (Test-Path "function.zip") {
 # Lấy tất cả file và folder cần thiết
 $itemsToZip = @(
     "src",
+    "lambda.js",
     "node_modules",
     "package.json",
     "package-lock.json"
