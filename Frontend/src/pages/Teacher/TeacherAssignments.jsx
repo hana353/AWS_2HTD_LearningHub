@@ -126,6 +126,15 @@ export default function TeacherAssignments() {
         ]
     });
 
+    // State cho câu hỏi cũ (đã có trong database)
+    const [existingQuestions, setExistingQuestions] = useState([]);
+
+    // State cho danh sách câu hỏi đã lưu (trong cùng phiên làm việc)
+    const [savedQuestions, setSavedQuestions] = useState([]);
+    
+    // State để track câu hỏi đang được chỉnh sửa (nếu có)
+    const [editingQuestionIndex, setEditingQuestionIndex] = useState(null);
+
     // --- LOGIC HANDLERS ---
 
     // Helper: Convert file to base64
@@ -160,6 +169,9 @@ export default function TeacherAssignments() {
 
     const handleCreateClick = () => {
         setEditingExamId(null);
+        setExistingQuestions([]); // Reset câu hỏi cũ
+        setSavedQuestions([]); // Reset danh sách câu hỏi đã lưu
+        setEditingQuestionIndex(null); // Reset trạng thái chỉnh sửa
         setNewExam({
             title: '',
             description: '',
@@ -169,11 +181,12 @@ export default function TeacherAssignments() {
             classId: '',
             dueDate: '',
             questions: [{ 
-                id: 1, 
+                id: Date.now(), 
                 text: '', 
                 type: 'multiple_choice',
                 options: ['', '', '', ''], 
                 correct: 0,
+                questionNumber: 1,
                 imageFile: null,
                 audioFile: null,
                 imageS3Key: null,
@@ -187,6 +200,8 @@ export default function TeacherAssignments() {
 
     const handleEditClick = async (exam) => {
         setEditingExamId(exam.id);
+        setSavedQuestions([]); // Reset danh sách câu hỏi đã lưu
+        setEditingQuestionIndex(null); // Reset trạng thái chỉnh sửa
         setNewExam({
             title: exam.title || '',
             description: exam.description || '',
@@ -195,21 +210,47 @@ export default function TeacherAssignments() {
             randomizeQuestions: exam.randomizeQuestions || false,
             classId: exam.classId || '',
             dueDate: exam.dueDate || '',
-            questions: [] // Sẽ load từ API
+            questions: [{ 
+                id: Date.now(), 
+                text: '', 
+                type: 'multiple_choice',
+                options: ['', '', '', ''], 
+                correct: 0,
+                questionNumber: 1,
+                imageFile: null,
+                audioFile: null,
+                imageS3Key: null,
+                audioS3Key: null,
+                imageUrl: null,
+                audioUrl: null
+            }] // Câu hỏi mới sẽ được thêm vào đây
         });
         setView('edit');
 
-        // Load câu hỏi từ API
+        // Load câu hỏi cũ từ API
         try {
             const questionsData = await getExamQuestions(exam.id);
-            const mappedQuestions = await Promise.all(questionsData.map(async (q, index) => {
+            // Đảm bảo questionsData là mảng
+            const questionsArray = Array.isArray(questionsData) ? questionsData : [];
+            const mappedQuestions = await Promise.all(questionsArray.map(async (q, index) => {
+                // Xử lý correct answer cho multiple_choice
+                let correctAnswer = 0;
+                if (q.type === 'multiple_choice' && q.choices) {
+                    const correctIndices = q.choices
+                        .map((choice, idx) => choice.isCorrect === true ? idx : -1)
+                        .filter(idx => idx !== -1);
+                    correctAnswer = correctIndices.length > 0 ? correctIndices : [0];
+                } else if (q.choices) {
+                    correctAnswer = q.choices.findIndex(choice => choice.isCorrect === true);
+                }
+
                 const question = {
                     id: q.questionId,
                     examQuestionId: q.examQuestionId,
                     text: q.body || '',
                     type: q.type || 'multiple_choice',
                     options: q.choices ? q.choices.map(choice => choice.text || '') : ['', '', '', ''],
-                    correct: q.choices ? q.choices.findIndex(choice => choice.isCorrect === true) : 0,
+                    correct: correctAnswer,
                     imageFile: null,
                     audioFile: null,
                     imageS3Key: q.imageS3Key || null,
@@ -239,50 +280,20 @@ export default function TeacherAssignments() {
                 return question;
             }));
             
-            // Nếu không có câu hỏi, thêm một câu hỏi trống
-            if (mappedQuestions.length === 0) {
-                mappedQuestions.push({ 
-                    id: Date.now(), 
-                    text: '', 
-                    type: 'multiple_choice',
-                    options: ['', '', '', ''], 
-                    correct: 0,
-                    imageFile: null,
-                    audioFile: null,
-                    imageS3Key: null,
-                    audioS3Key: null,
-                    imageUrl: null,
-                    audioUrl: null
-                });
-            }
-            
-            setNewExam(prev => ({
-                ...prev,
-                questions: mappedQuestions
-            }));
+            // Lưu câu hỏi cũ vào state riêng
+            setExistingQuestions(mappedQuestions);
         } catch (error) {
             console.error('Error loading questions:', error);
-            // Nếu lỗi, vẫn hiển thị form với câu hỏi trống
-            setNewExam(prev => ({
-                ...prev,
-                questions: [{ 
-                    id: Date.now(), 
-                    text: '', 
-                    type: 'multiple_choice',
-                    options: ['', '', '', ''], 
-                    correct: 0,
-                    imageFile: null,
-                    audioFile: null,
-                    imageS3Key: null,
-                    audioS3Key: null,
-                    imageUrl: null,
-                    audioUrl: null
-                }]
-            }));
+            setExistingQuestions([]);
         }
     };
 
     const handleAddQuestion = () => {
+        const maxQuestionNumber = Math.max(
+            ...newExam.questions.map(q => q.questionNumber || 0),
+            ...savedQuestions.map(sq => sq.questionNumber || 0),
+            0
+        );
         setNewExam(prev => ({
             ...prev,
             questions: [...prev.questions, { 
@@ -291,6 +302,7 @@ export default function TeacherAssignments() {
                 type: 'multiple_choice',
                 options: ['', '', '', ''], 
                 correct: 0,
+                questionNumber: maxQuestionNumber + 1,
                 imageFile: null,
                 audioFile: null,
                 imageS3Key: null,
@@ -302,36 +314,68 @@ export default function TeacherAssignments() {
     };
 
     // Handle question type change
-    const handleQuestionTypeChange = (qIndex, newType) => {
-        const updatedQuestions = [...newExam.questions];
-        updatedQuestions[qIndex].type = newType;
-        
-        // Adjust options based on type
-        if (newType === 'true_false') {
-            updatedQuestions[qIndex].options = ['True', 'False'];
-            updatedQuestions[qIndex].correct = 0;
-        } else if (newType === 'true_false_ng') {
-            updatedQuestions[qIndex].options = ['True', 'False', 'Not Given'];
-            updatedQuestions[qIndex].correct = 0;
-        } else if (newType === 'short_answer') {
-            updatedQuestions[qIndex].options = [];
-            updatedQuestions[qIndex].correct = -1;
-        } else if (newType === 'single_choice') {
-            if (updatedQuestions[qIndex].options.length === 0) {
-                updatedQuestions[qIndex].options = ['', '', '', ''];
+    const handleQuestionTypeChange = (qIndex, newType, isExisting = false) => {
+        if (isExisting) {
+            const updatedQuestions = [...existingQuestions];
+            updatedQuestions[qIndex].type = newType;
+            
+            // Adjust options based on type
+            if (newType === 'true_false') {
+                updatedQuestions[qIndex].options = ['True', 'False'];
+                updatedQuestions[qIndex].correct = 0;
+            } else if (newType === 'true_false_ng') {
+                updatedQuestions[qIndex].options = ['True', 'False', 'Not Given'];
+                updatedQuestions[qIndex].correct = 0;
+            } else if (newType === 'short_answer') {
+                updatedQuestions[qIndex].options = [];
+                updatedQuestions[qIndex].correct = -1;
+            } else if (newType === 'single_choice') {
+                if (updatedQuestions[qIndex].options.length === 0) {
+                    updatedQuestions[qIndex].options = ['', '', '', ''];
+                }
+                updatedQuestions[qIndex].correct = 0;
+            } else if (newType === 'multiple_choice') {
+                if (updatedQuestions[qIndex].options.length === 0) {
+                    updatedQuestions[qIndex].options = ['', '', '', ''];
+                }
+                // Multiple choice uses array for correct answers
+                updatedQuestions[qIndex].correct = Array.isArray(updatedQuestions[qIndex].correct) 
+                    ? updatedQuestions[qIndex].correct 
+                    : [0];
             }
-            updatedQuestions[qIndex].correct = 0;
-        } else if (newType === 'multiple_choice') {
-            if (updatedQuestions[qIndex].options.length === 0) {
-                updatedQuestions[qIndex].options = ['', '', '', ''];
+            
+            setExistingQuestions(updatedQuestions);
+        } else {
+            const updatedQuestions = [...newExam.questions];
+            updatedQuestions[qIndex].type = newType;
+            
+            // Adjust options based on type
+            if (newType === 'true_false') {
+                updatedQuestions[qIndex].options = ['True', 'False'];
+                updatedQuestions[qIndex].correct = 0;
+            } else if (newType === 'true_false_ng') {
+                updatedQuestions[qIndex].options = ['True', 'False', 'Not Given'];
+                updatedQuestions[qIndex].correct = 0;
+            } else if (newType === 'short_answer') {
+                updatedQuestions[qIndex].options = [];
+                updatedQuestions[qIndex].correct = -1;
+            } else if (newType === 'single_choice') {
+                if (updatedQuestions[qIndex].options.length === 0) {
+                    updatedQuestions[qIndex].options = ['', '', '', ''];
+                }
+                updatedQuestions[qIndex].correct = 0;
+            } else if (newType === 'multiple_choice') {
+                if (updatedQuestions[qIndex].options.length === 0) {
+                    updatedQuestions[qIndex].options = ['', '', '', ''];
+                }
+                // Multiple choice uses array for correct answers
+                updatedQuestions[qIndex].correct = Array.isArray(updatedQuestions[qIndex].correct) 
+                    ? updatedQuestions[qIndex].correct 
+                    : [0];
             }
-            // Multiple choice uses array for correct answers
-            updatedQuestions[qIndex].correct = Array.isArray(updatedQuestions[qIndex].correct) 
-                ? updatedQuestions[qIndex].correct 
-                : [0];
+            
+            setNewExam({ ...newExam, questions: updatedQuestions });
         }
-        
-        setNewExam({ ...newExam, questions: updatedQuestions });
     };
 
     // Handle file upload
@@ -393,9 +437,16 @@ export default function TeacherAssignments() {
     const handleRemoveQuestion = async (index) => {
         if (newExam.questions.length === 1) return;
         
-        const question = newExam.questions[index];
+        // Xóa khỏi UI (chỉ xóa câu hỏi mới, không xóa câu hỏi cũ từ đây)
+        const updated = newExam.questions.filter((_, i) => i !== index);
+        setNewExam({ ...newExam, questions: updated });
+    };
+
+    // Handler để xóa câu hỏi cũ
+    const handleRemoveExistingQuestion = async (index) => {
+        const question = existingQuestions[index];
         
-        // Nếu câu hỏi đã có trong database (có examQuestionId), xóa từ API
+        // Xóa từ API nếu có examQuestionId và questionId
         if (editingExamId && question.examQuestionId && question.id) {
             try {
                 await deleteExamQuestion(editingExamId, question.id);
@@ -407,8 +458,422 @@ export default function TeacherAssignments() {
         }
         
         // Xóa khỏi UI
-        const updated = newExam.questions.filter((_, i) => i !== index);
-        setNewExam({ ...newExam, questions: updated });
+        const updated = existingQuestions.filter((_, i) => i !== index);
+        setExistingQuestions(updated);
+        toast.success('Đã xóa câu hỏi');
+    };
+
+    // Handler để cập nhật câu hỏi cũ
+    const handleExistingQuestionChange = (index, field, value) => {
+        const updatedQuestions = [...existingQuestions];
+        updatedQuestions[index][field] = value;
+        setExistingQuestions(updatedQuestions);
+    };
+
+    const handleExistingOptionChange = (qIndex, oIndex, value) => {
+        const updatedQuestions = [...existingQuestions];
+        updatedQuestions[qIndex].options[oIndex] = value;
+        setExistingQuestions(updatedQuestions);
+    };
+
+    // Handler để lưu một câu hỏi mới ngay lập tức
+    const handleSaveSingleQuestion = async (qIndex) => {
+        const q = newExam.questions[qIndex];
+        
+        // Kiểm tra dữ liệu câu hỏi
+        if (!q.text || q.text.trim() === '') {
+            toast.warning("Vui lòng nhập nội dung câu hỏi!");
+            return;
+        }
+
+        // Kiểm tra đáp án (nếu không phải short_answer)
+        if (q.type !== 'short_answer') {
+            const validOptions = q.options.filter(opt => opt && opt.trim() !== '');
+            if (validOptions.length < 2) {
+                toast.warning("Câu hỏi cần ít nhất 2 đáp án!");
+                return;
+            }
+        }
+
+        try {
+            let examIdToUse = editingExamId;
+
+            // Nếu chưa có examId, cần tạo exam trước
+            if (!examIdToUse) {
+                if (!newExam.title || newExam.title.trim() === '') {
+                    toast.warning("Vui lòng nhập tên đề thi trước khi lưu câu hỏi!");
+                    return;
+                }
+
+                // Tạo exam mới
+                const examPayload = {
+                    courseId: null,
+                    title: newExam.title,
+                    description: newExam.description || '',
+                    durationMinutes: newExam.duration,
+                    passingScore: newExam.passingScore || 70,
+                    randomizeQuestions: newExam.randomizeQuestions || false
+                };
+
+                const newExamData = await createExam(examPayload);
+                examIdToUse = newExamData.id;
+                setEditingExamId(examIdToUse);
+
+                // Cập nhật state với examId mới
+                const examData = {
+                    id: newExamData.id,
+                    title: newExamData.title || newExam.title,
+                    classId: newExamData.course_id || newExam.classId || null,
+                    className: newExam.classId ? classes.find(c => c.id === newExam.classId)?.name || 'Chưa giao (Ngân hàng đề)' : 'Chưa giao (Ngân hàng đề)',
+                    duration: newExamData.duration_minutes || newExam.duration,
+                    questionsCount: 0,
+                    status: newExamData.published ? 'Active' : 'Draft',
+                    published: newExamData.published || false,
+                    dueDate: newExam.dueDate || null,
+                    description: newExamData.description || newExam.description,
+                    passingScore: newExamData.passing_score || newExam.passingScore,
+                    randomizeQuestions: newExamData.randomize_questions || newExam.randomizeQuestions,
+                    createdAt: newExamData.created_at,
+                    updatedAt: newExamData.updated_at
+                };
+
+                // Thêm vào danh sách assignments nếu chưa có
+                setAssignments(prevAssignments => {
+                    const exists = prevAssignments.find(a => a.id === examIdToUse);
+                    if (!exists) {
+                        return [examData, ...prevAssignments];
+                    }
+                    return prevAssignments;
+                });
+
+                // Chuyển sang chế độ edit sau khi tạo exam
+                setView('edit');
+            }
+
+            // Convert files to base64
+            let imageFileBase64 = null;
+            let audioFileBase64 = null;
+            
+            if (q.imageFile) {
+                try {
+                    imageFileBase64 = await fileToBase64(q.imageFile);
+                } catch (error) {
+                    console.error('Error converting image to base64:', error);
+                    toast.error(`Lỗi khi xử lý ảnh: ${error.message}`);
+                    return;
+                }
+            }
+            
+            if (q.audioFile) {
+                try {
+                    audioFileBase64 = await fileToBase64(q.audioFile);
+                } catch (error) {
+                    console.error('Error converting audio to base64:', error);
+                    toast.error(`Lỗi khi xử lý audio: ${error.message}`);
+                    return;
+                }
+            }
+            
+            // Build choices based on question type
+            let choices = [];
+            if (q.type === 'short_answer') {
+                choices = null;
+            } else {
+                const validOptions = q.options.filter(opt => opt && opt.trim() !== '');
+                choices = validOptions.map((opt, oIndex) => {
+                    let value = String.fromCharCode(65 + oIndex);
+                    if (q.type === 'true_false') {
+                        value = opt === 'True' ? 'T' : 'F';
+                    } else if (q.type === 'true_false_ng') {
+                        if (opt === 'True') value = 'T';
+                        else if (opt === 'False') value = 'F';
+                        else if (opt === 'Not Given') value = 'NG';
+                    }
+                    
+                    return {
+                        text: opt,
+                        value: value,
+                        isCorrect: q.type === 'multiple_choice' 
+                            ? (q.correct === oIndex || (Array.isArray(q.correct) && q.correct.includes(oIndex)))
+                            : (q.correct === oIndex)
+                    };
+                });
+            }
+            
+            const payload = {
+                title: `Câu hỏi: ${q.text.substring(0, 100)}`,
+                body: q.text,
+                type: q.type || 'multiple_choice',
+                difficulty: 2,
+                tags: ["exam", "teacher_created"],
+                choices: choices,
+                imageFile: imageFileBase64,
+                audioFile: audioFileBase64
+            };
+
+            // Kiểm tra nếu đang chỉnh sửa câu hỏi đã lưu
+            const isEditingSaved = editingQuestionIndex !== null && savedQuestions[editingQuestionIndex]?.questionId;
+            
+            if (isEditingSaved) {
+                // Cập nhật câu hỏi đã có
+                const questionToUpdate = savedQuestions[editingQuestionIndex];
+                await updateExamQuestion(examIdToUse, questionToUpdate.questionId, payload);
+            } else {
+                // Tạo câu hỏi mới
+                await createExamQuestion(examIdToUse, payload);
+            }
+
+            // Reload toàn bộ danh sách câu hỏi từ API để đảm bảo đồng bộ
+            const questionsData = await getExamQuestions(examIdToUse);
+            // Đảm bảo questionsData là mảng
+            const questionsArray = Array.isArray(questionsData) ? questionsData : [];
+            const mappedQuestions = await Promise.all(questionsArray.map(async (qData) => {
+                // Xử lý correct answer cho multiple_choice
+                let correctAnswer = 0;
+                if (qData.type === 'multiple_choice' && qData.choices) {
+                    const correctIndices = qData.choices
+                        .map((choice, idx) => choice.isCorrect === true ? idx : -1)
+                        .filter(idx => idx !== -1);
+                    correctAnswer = correctIndices.length > 0 ? correctIndices : [0];
+                } else if (qData.choices) {
+                    correctAnswer = qData.choices.findIndex(choice => choice.isCorrect === true);
+                }
+
+                const question = {
+                    id: qData.questionId,
+                    examQuestionId: qData.examQuestionId,
+                    text: qData.body || '',
+                    type: qData.type || 'multiple_choice',
+                    options: qData.choices ? qData.choices.map(choice => choice.text || '') : ['', '', '', ''],
+                    correct: correctAnswer,
+                    imageFile: null,
+                    audioFile: null,
+                    imageS3Key: qData.imageS3Key || null,
+                    audioS3Key: qData.audioS3Key || null,
+                    imageUrl: null,
+                    audioUrl: null
+                };
+
+                // Load presigned URLs for existing media
+                if (question.imageS3Key) {
+                    try {
+                        const result = await getPresignedUrl(question.imageS3Key);
+                        question.imageUrl = result.url || result;
+                    } catch (err) {
+                        console.error('Error loading image URL:', err);
+                    }
+                }
+                if (question.audioS3Key) {
+                    try {
+                        const result = await getPresignedUrl(question.audioS3Key);
+                        question.audioUrl = result.url || result;
+                    } catch (err) {
+                        console.error('Error loading audio URL:', err);
+                    }
+                }
+
+                return question;
+            }));
+
+            // Cập nhật danh sách câu hỏi đã có
+            setExistingQuestions(mappedQuestions);
+            
+            // Tìm câu hỏi vừa tạo/cập nhật trong danh sách từ API
+            let foundQuestion = null;
+            if (editingQuestionIndex !== null && savedQuestions[editingQuestionIndex]?.questionId) {
+                // Đang chỉnh sửa: tìm câu hỏi theo questionId
+                foundQuestion = mappedQuestions.find(mq => mq.id === savedQuestions[editingQuestionIndex].questionId);
+            } else {
+                // Tạo mới: lấy câu hỏi cuối cùng (vừa tạo)
+                foundQuestion = mappedQuestions.length > 0 ? mappedQuestions[mappedQuestions.length - 1] : null;
+            }
+            
+            // Tạo object câu hỏi đã lưu để thêm vào danh sách
+            const savedQuestion = {
+                id: q.id,
+                questionId: foundQuestion ? foundQuestion.id : (editingQuestionIndex !== null ? savedQuestions[editingQuestionIndex]?.questionId : null),
+                examQuestionId: foundQuestion ? foundQuestion.examQuestionId : (editingQuestionIndex !== null ? savedQuestions[editingQuestionIndex]?.examQuestionId : null),
+                text: q.text,
+                type: q.type,
+                options: [...q.options],
+                correct: Array.isArray(q.correct) ? [...q.correct] : q.correct,
+                questionNumber: q.questionNumber || (savedQuestions.length + 1),
+                imageFile: q.imageFile,
+                audioFile: q.audioFile,
+                imageS3Key: foundQuestion ? foundQuestion.imageS3Key : (editingQuestionIndex !== null ? savedQuestions[editingQuestionIndex]?.imageS3Key : null),
+                audioS3Key: foundQuestion ? foundQuestion.audioS3Key : (editingQuestionIndex !== null ? savedQuestions[editingQuestionIndex]?.audioS3Key : null),
+                imageUrl: q.imageUrl,
+                audioUrl: q.audioUrl
+            };
+
+            // Nếu đang chỉnh sửa, cập nhật câu hỏi trong danh sách
+            if (editingQuestionIndex !== null) {
+                const updatedSavedQuestions = [...savedQuestions];
+                updatedSavedQuestions[editingQuestionIndex] = savedQuestion;
+                setSavedQuestions(updatedSavedQuestions);
+                setEditingQuestionIndex(null);
+            } else {
+                // Thêm câu hỏi mới vào danh sách
+                setSavedQuestions([...savedQuestions, savedQuestion]);
+            }
+            
+            // Tính số thứ tự tiếp theo
+            const nextQuestionNumber = savedQuestions.length > 0 
+                ? Math.max(...savedQuestions.map(sq => sq.questionNumber || 0), 0) + 1
+                : 1;
+            
+            // Reset form về trạng thái ban đầu (không xóa câu hỏi)
+            const updatedQuestions = [...newExam.questions];
+            updatedQuestions[qIndex] = { 
+                id: Date.now(), 
+                text: '', 
+                type: 'multiple_choice',
+                options: ['', '', '', ''], 
+                correct: 0,
+                questionNumber: nextQuestionNumber,
+                imageFile: null,
+                audioFile: null,
+                imageS3Key: null,
+                audioS3Key: null,
+                imageUrl: null,
+                audioUrl: null
+            };
+            
+            setNewExam({ ...newExam, questions: updatedQuestions });
+
+            toast.success(editingQuestionIndex !== null ? "Đã cập nhật câu hỏi thành công!" : "Đã lưu câu hỏi thành công!");
+        } catch (error) {
+            console.error("Error saving question:", error);
+            toast.error(error.message || "Có lỗi xảy ra khi lưu câu hỏi");
+        }
+    };
+
+    // Handler để chỉnh sửa câu hỏi đã lưu
+    const handleEditSavedQuestion = async (index) => {
+        const question = savedQuestions[index];
+        
+        // Load presigned URLs nếu có S3 keys nhưng chưa có URL
+        let imageUrl = question.imageUrl;
+        let audioUrl = question.audioUrl;
+        
+        if (question.imageS3Key && !imageUrl) {
+            try {
+                const result = await getPresignedUrl(question.imageS3Key);
+                imageUrl = result.url || result;
+            } catch (err) {
+                console.error('Error loading image URL:', err);
+            }
+        }
+        
+        if (question.audioS3Key && !audioUrl) {
+            try {
+                const result = await getPresignedUrl(question.audioS3Key);
+                audioUrl = result.url || result;
+            } catch (err) {
+                console.error('Error loading audio URL:', err);
+            }
+        }
+        
+        // Load dữ liệu câu hỏi vào form
+        const updatedQuestions = [...newExam.questions];
+        if (updatedQuestions.length > 0) {
+            updatedQuestions[0] = {
+                id: question.id,
+                text: question.text,
+                type: question.type,
+                options: [...question.options],
+                correct: Array.isArray(question.correct) ? [...question.correct] : question.correct,
+                questionNumber: question.questionNumber,
+                imageFile: question.imageFile,
+                audioFile: question.audioFile,
+                imageS3Key: question.imageS3Key,
+                audioS3Key: question.audioS3Key,
+                imageUrl: imageUrl,
+                audioUrl: audioUrl
+            };
+        } else {
+            updatedQuestions.push({
+                id: question.id,
+                text: question.text,
+                type: question.type,
+                options: [...question.options],
+                correct: Array.isArray(question.correct) ? [...question.correct] : question.correct,
+                questionNumber: question.questionNumber,
+                imageFile: question.imageFile,
+                audioFile: question.audioFile,
+                imageS3Key: question.imageS3Key,
+                audioS3Key: question.audioS3Key,
+                imageUrl: imageUrl,
+                audioUrl: audioUrl
+            });
+        }
+        
+        setNewExam({ ...newExam, questions: updatedQuestions });
+        setEditingQuestionIndex(index);
+    };
+
+    // Handler để xóa câu hỏi đã lưu
+    const handleDeleteSavedQuestion = async (index) => {
+        const question = savedQuestions[index];
+        
+        // Nếu câu hỏi đã được lưu vào database, xóa từ API
+        if (editingExamId && question.questionId && question.examQuestionId) {
+            try {
+                await deleteExamQuestion(editingExamId, question.questionId);
+                toast.success("Đã xóa câu hỏi khỏi đề thi");
+            } catch (error) {
+                console.error('Error deleting question:', error);
+                toast.error('Không thể xóa câu hỏi: ' + (error.message || 'Lỗi không xác định'));
+                return;
+            }
+        }
+        
+        // Xóa khỏi danh sách đã lưu
+        const updatedSavedQuestions = savedQuestions.filter((_, i) => i !== index);
+        setSavedQuestions(updatedSavedQuestions);
+        
+        // Nếu đang chỉnh sửa câu hỏi này, reset form
+        if (editingQuestionIndex === index) {
+            setEditingQuestionIndex(null);
+            const updatedQuestions = [...newExam.questions];
+            if (updatedQuestions.length > 0) {
+                updatedQuestions[0] = { 
+                    id: Date.now(), 
+                    text: '', 
+                    type: 'multiple_choice',
+                    options: ['', '', '', ''], 
+                    correct: 0,
+                    questionNumber: updatedSavedQuestions.length > 0 
+                        ? Math.max(...updatedSavedQuestions.map(sq => sq.questionNumber || 0), 0) + 1
+                        : 1,
+                    imageFile: null,
+                    audioFile: null,
+                    imageS3Key: null,
+                    audioS3Key: null,
+                    imageUrl: null,
+                    audioUrl: null
+                };
+            }
+            setNewExam({ ...newExam, questions: updatedQuestions });
+        }
+    };
+
+    // Handler để cập nhật số thứ tự câu hỏi
+    const handleQuestionNumberChange = (qIndex, newNumber) => {
+        const num = parseInt(newNumber) || 1;
+        const updatedQuestions = [...newExam.questions];
+        updatedQuestions[qIndex].questionNumber = num;
+        setNewExam({ ...newExam, questions: updatedQuestions });
+    };
+
+    // Handler để cập nhật số thứ tự câu hỏi đã lưu
+    const handleSavedQuestionNumberChange = (index, newNumber) => {
+        const num = parseInt(newNumber) || 1;
+        const updatedSavedQuestions = [...savedQuestions];
+        updatedSavedQuestions[index].questionNumber = num;
+        // Sắp xếp lại danh sách theo số thứ tự
+        updatedSavedQuestions.sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0));
+        setSavedQuestions(updatedSavedQuestions);
     };
 
     const handleSaveExam = async () => {
@@ -474,7 +939,83 @@ export default function TeacherAssignments() {
             // Lấy examId từ response (nếu tạo mới) hoặc từ editingExamId (nếu chỉnh sửa)
             const examIdToUse = updatedExam.id || editingExamId;
 
-            // Xử lý câu hỏi: phân biệt câu hỏi mới và câu hỏi đã có
+            // Xử lý câu hỏi cũ: cập nhật nếu có thay đổi
+            if (examIdToUse && editingExamId) {
+                for (const q of existingQuestions) {
+                    // Bỏ qua câu hỏi trống hoặc không có examQuestionId
+                    if (!q.text || q.text.trim() === '' || !q.examQuestionId || !q.id) continue;
+                    
+                    // Convert files to base64 nếu có file mới
+                    let imageFileBase64 = null;
+                    let audioFileBase64 = null;
+                    
+                    if (q.imageFile) {
+                        try {
+                            imageFileBase64 = await fileToBase64(q.imageFile);
+                        } catch (error) {
+                            console.error('Error converting image to base64:', error);
+                            continue;
+                        }
+                    }
+                    
+                    if (q.audioFile) {
+                        try {
+                            audioFileBase64 = await fileToBase64(q.audioFile);
+                        } catch (error) {
+                            console.error('Error converting audio to base64:', error);
+                            continue;
+                        }
+                    }
+                    
+                    // Build choices based on question type
+                    let choices = [];
+                    if (q.type === 'short_answer') {
+                        choices = null;
+                    } else {
+                        const validOptions = q.options.filter(opt => opt && opt.trim() !== '');
+                        if (validOptions.length < 2) continue;
+                        
+                        choices = validOptions.map((opt, oIndex) => {
+                            let value = String.fromCharCode(65 + oIndex);
+                            if (q.type === 'true_false') {
+                                value = opt === 'True' ? 'T' : 'F';
+                            } else if (q.type === 'true_false_ng') {
+                                if (opt === 'True') value = 'T';
+                                else if (opt === 'False') value = 'F';
+                                else if (opt === 'Not Given') value = 'NG';
+                            }
+                            
+                            return {
+                                text: opt,
+                                value: value,
+                                isCorrect: q.type === 'multiple_choice' 
+                                    ? (Array.isArray(q.correct) && q.correct.includes(oIndex))
+                                    : (q.correct === oIndex)
+                            };
+                        });
+                    }
+                    
+                    const payload = {
+                        title: `Câu hỏi: ${q.text.substring(0, 100)}`,
+                        body: q.text,
+                        type: q.type || 'multiple_choice',
+                        difficulty: 2,
+                        tags: ["exam", "teacher_created"],
+                        choices: choices,
+                        imageFile: imageFileBase64,
+                        audioFile: audioFileBase64
+                    };
+
+                    try {
+                        await updateExamQuestion(examIdToUse, q.id, payload);
+                    } catch (error) {
+                        console.error('Error updating existing question:', error);
+                        toast.error(`Lỗi cập nhật câu hỏi: ${error.message}`);
+                    }
+                }
+            }
+
+            // Xử lý câu hỏi mới: tạo mới
             if (examIdToUse) {
                 for (const q of newExam.questions) {
                     // Bỏ qua câu hỏi trống
@@ -548,24 +1089,13 @@ export default function TeacherAssignments() {
                         audioFile: audioFileBase64
                     };
 
-                    // Nếu câu hỏi đã có (có examQuestionId và questionId), cập nhật
-                    if (editingExamId && q.examQuestionId && q.id) {
-                        try {
-                            await updateExamQuestion(examIdToUse, q.id, payload);
-                        } catch (error) {
-                            console.error('Error updating question:', error);
-                            toast.error(`Lỗi cập nhật câu hỏi: ${error.message}`);
-                            // Tiếp tục với các câu hỏi khác
-                        }
-                    } else {
-                        // Câu hỏi mới, tạo mới
-                        try {
-                            await createExamQuestion(examIdToUse, payload);
-                        } catch (error) {
-                            console.error('Error creating question:', error);
-                            toast.error(`Lỗi tạo câu hỏi: ${error.message}`);
-                            // Tiếp tục với các câu hỏi khác
-                        }
+                    // Câu hỏi mới, tạo mới
+                    try {
+                        await createExamQuestion(examIdToUse, payload);
+                    } catch (error) {
+                        console.error('Error creating question:', error);
+                        toast.error(`Lỗi tạo câu hỏi: ${error.message}`);
+                        // Tiếp tục với các câu hỏi khác
                     }
                 }
             }
@@ -788,11 +1318,280 @@ export default function TeacherAssignments() {
 
                     {/* RIGHT COLUMN: Question Builder */}
                     <div className="lg:col-span-2 space-y-6">
+                        {/* Hiển thị câu hỏi cũ (nếu đang edit) */}
+                        {isEditing && existingQuestions.length > 0 && (
+                            <div className="mb-8">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <h3 className="text-lg font-bold text-gray-800">Câu hỏi đã có ({existingQuestions.length})</h3>
+                                    <div className="flex-1 h-px bg-gray-200"></div>
+                                </div>
+                                <div className="space-y-6">
+                                    {existingQuestions.map((q, qIndex) => (
+                                        <div key={q.id || q.examQuestionId} className="bg-blue-50 p-6 rounded-2xl shadow-sm border-2 border-blue-100 relative group transition hover:shadow-md">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="bg-blue-200 text-blue-800 px-3 py-1 rounded-md text-xs font-bold">Câu hỏi {qIndex + 1} (Đã có)</span>
+                                                    <select
+                                                        value={q.type || 'multiple_choice'}
+                                                        onChange={(e) => handleQuestionTypeChange(qIndex, e.target.value, true)}
+                                                        className="text-xs px-2 py-1 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5a4d8c]"
+                                                    >
+                                                        <option value="single_choice">Single Choice</option>
+                                                        <option value="multiple_choice">Multiple Choice</option>
+                                                        <option value="true_false_ng">True/False/Not Given</option>
+                                                        <option value="short_answer">Short Answer</option>
+                                                    </select>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleRemoveExistingQuestion(qIndex)}
+                                                    className="text-gray-400 hover:text-red-500 transition p-1"
+                                                >
+                                                    <Trash size={18} />
+                                                </button>
+                                            </div>
+
+                                            {/* Nội dung câu hỏi */}
+                                            <div className="mb-4">
+                                                <textarea
+                                                    className="w-full text-lg font-medium border-b border-blue-200 pb-2 focus:border-[#5a4d8c] outline-none transition placeholder-gray-300 resize-none bg-transparent"
+                                                    placeholder="Nhập nội dung câu hỏi tại đây..."
+                                                    value={q.text}
+                                                    onChange={(e) => handleExistingQuestionChange(qIndex, 'text', e.target.value)}
+                                                    rows="2"
+                                                />
+                                            </div>
+
+                                            {/* Media Files */}
+                                            <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* Image Upload */}
+                                                <div className="space-y-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                                        <Image size={16} className="text-[#5a4d8c]" />
+                                                        Ảnh đính kèm
+                                                    </label>
+                                                    {q.imageUrl ? (
+                                                        <div className="relative">
+                                                            <img 
+                                                                src={q.imageUrl} 
+                                                                alt="Question" 
+                                                                className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                                                            />
+                                                            <button
+                                                                onClick={() => {
+                                                                    const updatedQuestions = [...existingQuestions];
+                                                                    if (updatedQuestions[qIndex].imageUrl && updatedQuestions[qIndex].imageUrl.startsWith('blob:')) {
+                                                                        URL.revokeObjectURL(updatedQuestions[qIndex].imageUrl);
+                                                                    }
+                                                                    updatedQuestions[qIndex].imageFile = null;
+                                                                    updatedQuestions[qIndex].imageUrl = null;
+                                                                    updatedQuestions[qIndex].imageS3Key = null;
+                                                                    setExistingQuestions(updatedQuestions);
+                                                                }}
+                                                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <label className="flex items-center justify-center w-full h-20 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#5a4d8c] transition">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <Upload size={20} className="text-gray-400" />
+                                                                <span className="text-xs text-gray-500">Chọn ảnh</span>
+                                                            </div>
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files[0];
+                                                                    if (!file) return;
+                                                                    const updatedQuestions = [...existingQuestions];
+                                                                    updatedQuestions[qIndex].imageFile = file;
+                                                                    updatedQuestions[qIndex].imageUrl = URL.createObjectURL(file);
+                                                                    setExistingQuestions(updatedQuestions);
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    )}
+                                                </div>
+
+                                                {/* Audio Upload */}
+                                                <div className="space-y-2">
+                                                    <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
+                                                        <Music size={16} className="text-[#5a4d8c]" />
+                                                        Audio đính kèm
+                                                    </label>
+                                                    {q.audioUrl ? (
+                                                        <div className="relative">
+                                                            <audio controls className="w-full rounded-lg">
+                                                                <source src={q.audioUrl} />
+                                                                Your browser does not support the audio element.
+                                                            </audio>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const updatedQuestions = [...existingQuestions];
+                                                                    if (updatedQuestions[qIndex].audioUrl && updatedQuestions[qIndex].audioUrl.startsWith('blob:')) {
+                                                                        URL.revokeObjectURL(updatedQuestions[qIndex].audioUrl);
+                                                                    }
+                                                                    updatedQuestions[qIndex].audioFile = null;
+                                                                    updatedQuestions[qIndex].audioUrl = null;
+                                                                    updatedQuestions[qIndex].audioS3Key = null;
+                                                                    setExistingQuestions(updatedQuestions);
+                                                                }}
+                                                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <label className="flex items-center justify-center w-full h-20 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#5a4d8c] transition">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                <Upload size={20} className="text-gray-400" />
+                                                                <span className="text-xs text-gray-500">Chọn audio</span>
+                                                            </div>
+                                                            <input
+                                                                type="file"
+                                                                accept="audio/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files[0];
+                                                                    if (!file) return;
+                                                                    const updatedQuestions = [...existingQuestions];
+                                                                    updatedQuestions[qIndex].audioFile = file;
+                                                                    updatedQuestions[qIndex].audioUrl = URL.createObjectURL(file);
+                                                                    setExistingQuestions(updatedQuestions);
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Các đáp án - chỉ hiển thị nếu không phải short_answer */}
+                                            {q.type !== 'short_answer' && (
+                                                <div className="space-y-3">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {q.options.map((opt, oIndex) => (
+                                                            <div key={oIndex} className={`flex items-center gap-3 p-3 rounded-lg border ${
+                                                                (q.type === 'multiple_choice' && Array.isArray(q.correct) && q.correct.includes(oIndex)) ||
+                                                                (q.type !== 'multiple_choice' && q.correct === oIndex)
+                                                                    ? 'border-green-200 bg-green-50' 
+                                                                    : 'border-gray-100 bg-white'
+                                                            }`}>
+                                                                {q.type === 'multiple_choice' ? (
+                                                                    <input 
+                                                                        type="checkbox" 
+                                                                        className="w-4 h-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                                                        checked={Array.isArray(q.correct) ? q.correct.includes(oIndex) : false}
+                                                                        onChange={(e) => {
+                                                                            const updatedQuestions = [...existingQuestions];
+                                                                            const currentCorrect = Array.isArray(updatedQuestions[qIndex].correct) 
+                                                                                ? updatedQuestions[qIndex].correct 
+                                                                                : [];
+                                                                            if (e.target.checked) {
+                                                                                updatedQuestions[qIndex].correct = [...currentCorrect, oIndex];
+                                                                            } else {
+                                                                                updatedQuestions[qIndex].correct = currentCorrect.filter(i => i !== oIndex);
+                                                                            }
+                                                                            setExistingQuestions(updatedQuestions);
+                                                                        }}
+                                                                    />
+                                                                ) : (
+                                                                    <input 
+                                                                        type="radio" 
+                                                                        name={`existing-question-${q.id}-${qIndex}`} 
+                                                                        className="w-4 h-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                                                        checked={q.correct === oIndex}
+                                                                        onChange={() => handleExistingQuestionChange(qIndex, 'correct', oIndex)}
+                                                                    />
+                                                                )}
+                                                                <input 
+                                                                    type="text" 
+                                                                    className="flex-1 bg-transparent outline-none text-sm"
+                                                                    placeholder={`Đáp án ${String.fromCharCode(65 + oIndex)}`}
+                                                                    value={opt}
+                                                                    onChange={(e) => handleExistingOptionChange(qIndex, oIndex, e.target.value)}
+                                                                />
+                                                                {q.options.length > 2 && (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const updatedQuestions = [...existingQuestions];
+                                                                            updatedQuestions[qIndex].options = updatedQuestions[qIndex].options.filter((_, i) => i !== oIndex);
+                                                                            // Adjust correct indices
+                                                                            if (q.type === 'multiple_choice') {
+                                                                                updatedQuestions[qIndex].correct = Array.isArray(updatedQuestions[qIndex].correct)
+                                                                                    ? updatedQuestions[qIndex].correct.filter(i => i !== oIndex).map(i => i > oIndex ? i - 1 : i)
+                                                                                    : [];
+                                                                            } else if (updatedQuestions[qIndex].correct === oIndex) {
+                                                                                updatedQuestions[qIndex].correct = 0;
+                                                                            } else if (updatedQuestions[qIndex].correct > oIndex) {
+                                                                                updatedQuestions[qIndex].correct = updatedQuestions[qIndex].correct - 1;
+                                                                            }
+                                                                            setExistingQuestions(updatedQuestions);
+                                                                        }}
+                                                                        className="text-red-400 hover:text-red-600 transition p-1"
+                                                                    >
+                                                                        <X size={14} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    {(q.type === 'multiple_choice' || q.type === 'single_choice') && (
+                                                        <button
+                                                            onClick={() => {
+                                                                const updatedQuestions = [...existingQuestions];
+                                                                updatedQuestions[qIndex].options.push('');
+                                                                setExistingQuestions(updatedQuestions);
+                                                            }}
+                                                            className="flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-[#5a4d8c] hover:text-[#5a4d8c] transition"
+                                                        >
+                                                            <Plus size={16} />
+                                                            <span className="text-sm">Thêm đáp án</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Short Answer - chỉ hiển thị gợi ý */}
+                                            {q.type === 'short_answer' && (
+                                                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                                    <p className="text-sm text-blue-700">
+                                                        <strong>Gợi ý:</strong> Câu hỏi dạng Short Answer sẽ được chấm tự động dựa trên từ khóa. 
+                                                        Học viên sẽ nhập câu trả lời dạng text tự do.
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Phần thêm câu hỏi mới */}
+                        {isEditing && existingQuestions.length > 0 && (
+                            <div className="mb-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <h3 className="text-lg font-bold text-gray-800">Thêm câu hỏi mới</h3>
+                                    <div className="flex-1 h-px bg-gray-200"></div>
+                                </div>
+                            </div>
+                        )}
+
                         {newExam.questions.map((q, qIndex) => (
                             <div key={q.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 relative group transition hover:shadow-md">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="flex items-center gap-3">
-                                        <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-md text-xs font-bold">Câu hỏi {qIndex + 1}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-600 font-medium">Câu hỏi số:</span>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                value={q.questionNumber || 1}
+                                                onChange={(e) => handleQuestionNumberChange(qIndex, e.target.value)}
+                                                className="w-16 px-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5a4d8c]"
+                                            />
+                                        </div>
                                         <select
                                             value={q.type || 'multiple_choice'}
                                             onChange={(e) => handleQuestionTypeChange(qIndex, e.target.value)}
@@ -804,12 +1603,21 @@ export default function TeacherAssignments() {
                                             <option value="short_answer">Short Answer</option>
                                         </select>
                                     </div>
-                                    <button 
-                                        onClick={() => handleRemoveQuestion(qIndex)}
-                                        className="text-gray-400 hover:text-red-500 transition p-1"
-                                    >
-                                        <Trash size={18} />
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={() => handleSaveSingleQuestion(qIndex)}
+                                            className="px-3 py-1.5 bg-green-500 text-white text-xs font-medium rounded-lg hover:bg-green-600 transition flex items-center gap-1"
+                                        >
+                                            <Save size={14} />
+                                            Lưu
+                                        </button>
+                                        <button 
+                                            onClick={() => handleRemoveQuestion(qIndex)}
+                                            className="text-gray-400 hover:text-red-500 transition p-1"
+                                        >
+                                            <Trash size={18} />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Nội dung câu hỏi */}
@@ -994,6 +1802,73 @@ export default function TeacherAssignments() {
                                 )}
                             </div>
                         ))}
+
+                        {/* Danh sách câu hỏi đã lưu */}
+                        {savedQuestions.length > 0 && (
+                            <div className="mt-8">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <h3 className="text-lg font-bold text-gray-800">Danh sách câu hỏi đã lưu</h3>
+                                    <div className="flex-1 h-px bg-gray-200"></div>
+                                </div>
+                                <div className="space-y-3">
+                                    {savedQuestions
+                                        .sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0))
+                                        .map((question, index) => {
+                                            const originalIndex = savedQuestions.findIndex(sq => sq.id === question.id);
+                                            return (
+                                                <div key={question.id} className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition">
+                                                    <div className="flex justify-between items-start">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-3 mb-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="text-xs text-gray-600 font-medium">Câu hỏi số:</span>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={question.questionNumber || 1}
+                                                                        onChange={(e) => handleSavedQuestionNumberChange(originalIndex, e.target.value)}
+                                                                        className="w-16 px-2 py-1 text-xs border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5a4d8c]"
+                                                                    />
+                                                                </div>
+                                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                                    question.type === 'multiple_choice' ? 'bg-blue-100 text-blue-700' :
+                                                                    question.type === 'single_choice' ? 'bg-purple-100 text-purple-700' :
+                                                                    question.type === 'true_false_ng' ? 'bg-orange-100 text-orange-700' :
+                                                                    'bg-green-100 text-green-700'
+                                                                }`}>
+                                                                    {question.type === 'multiple_choice' ? 'Multiple Choice' :
+                                                                     question.type === 'single_choice' ? 'Single Choice' :
+                                                                     question.type === 'true_false_ng' ? 'True/False/Not Given' :
+                                                                     'Short Answer'}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-700 line-clamp-2">
+                                                                {question.text || 'Chưa có nội dung'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 ml-4">
+                                                            <button
+                                                                onClick={() => handleEditSavedQuestion(originalIndex)}
+                                                                className="px-3 py-1.5 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition flex items-center gap-1"
+                                                            >
+                                                                <PenTool size={14} />
+                                                                Sửa
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleDeleteSavedQuestion(originalIndex)}
+                                                                className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition flex items-center gap-1"
+                                                            >
+                                                                <Trash size={14} />
+                                                                Xóa
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        )}
 
                         <button 
                             onClick={handleAddQuestion}
