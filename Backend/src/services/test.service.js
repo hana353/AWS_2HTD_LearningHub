@@ -360,23 +360,42 @@ export async function createQuestionInExam(teacherId, examId, payload) {
 
   const eq = result.recordset[0];
 
-  const parsedChoices = question.choices
-  ? JSON.parse(question.choices)
-  : null;
-const parsedTags = question.tags
-  ? JSON.parse(question.tags)
-  : null;
+  let choices = null;
+  if (question.choices) {
+    if (typeof question.choices === 'string') {
+      try {
+        choices = JSON.parse(question.choices);
+      } catch {
+        choices = null;
+      }
+    } else {
+      choices = question.choices;
+    }
+  }
 
-const questionItem = {
-  questionId: question.id,
-  title: question.title,
-  body: question.body,
-  type: question.type,
-  difficulty: question.difficulty,
-  choices: parsedChoices,
-  tags: parsedTags,
-  points: Number(eq.points ?? 1),
-  sequence: eq.sequence
+  let tags = null;
+  if (question.tags) {
+    if (typeof question.tags === 'string') {
+      try {
+        tags = JSON.parse(question.tags);
+      } catch {
+        tags = null;
+      }
+    } else {
+      tags = question.tags;
+    }
+  }
+
+  const questionItem = {
+    questionId: question.id,
+    title: question.title,
+    body: question.body,
+    type: question.type,
+    difficulty: question.difficulty,
+    choices,
+    tags,
+    points: Number(eq.points ?? 1),
+    sequence: eq.sequence
   };
 
   return buildExamQuestionsResponse(exam, [questionItem]);

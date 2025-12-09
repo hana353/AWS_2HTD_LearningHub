@@ -65,5 +65,9 @@ export const createQuestionSchema = Joi.object({
 // Schema dùng khi tạo câu hỏi TRONG exam
 export const createQuestionInExamSchema = createQuestionSchema.keys({
   points: Joi.number().min(0).default(1),
-  sequence: Joi.number().integer().min(1).optional()
+  sequence: Joi.number().integer().min(1).optional(),
+
+  // CHO PHÉP 2 field này FE gửi lên
+  imageFile: Joi.any().optional().allow(null),
+  audioFile: Joi.any().optional().allow(null)
 });
