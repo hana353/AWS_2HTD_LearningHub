@@ -31,25 +31,54 @@ const dbConfig = {
 const pool = new sql.ConnectionPool(dbConfig);
 
 // Lambda sẽ reuse connection pool giữa các invocations
-const poolConnect = pool
-  .connect()
-  .then(() => {
-    console.log('✅ Connected to SQL Server');
-  })
-  .catch((err) => {
-    console.error('❌ SQL connection error:', err);
-    throw err;
-  });
+// Lưu ý: Connection sẽ được reuse giữa các invocations nếu Lambda container còn warm
+let poolConnectPromise = null;
+
+function getPoolConnect() {
+  if (!poolConnectPromise) {
+    poolConnectPromise = pool
+      .connect()
+      .then(() => {
+        console.log('✅ Connected to SQL Server');
+        return pool;
+      })
+      .catch((err) => {
+        console.error('❌ SQL connection error:', {
+          message: err.message,
+          code: err.code,
+          name: err.name,
+          server: dbConfig.server,
+          port: dbConfig.port,
+        });
+        // Reset promise để retry ở lần sau
+        poolConnectPromise = null;
+        throw err;
+      });
+  }
+  return poolConnectPromise;
+}
+
+const poolConnect = getPoolConnect();
 
 export { sql, pool, poolConnect };
 
 export async function getRequest() {
-  await poolConnect;
-  return pool.request();
+  try {
+    await getPoolConnect();
+    return pool.request();
+  } catch (err) {
+    console.error('Failed to get database request:', err);
+    throw err;
+  }
 }
 
 // ===== helper cho model mới =====
 export async function getPool() {
-  await poolConnect;
-  return pool;
+  try {
+    await getPoolConnect();
+    return pool;
+  } catch (err) {
+    console.error('Failed to get database pool:', err);
+    throw err;
+  }
 }

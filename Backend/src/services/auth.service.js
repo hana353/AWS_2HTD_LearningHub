@@ -79,15 +79,36 @@ export async function register({ email, password, fullName, phone, role }) {
   const normalizedRoleKey = (role || "").toLowerCase(); // "member" | "teacher"
   const desiredRoleId = ROLE_KEY_TO_ID[normalizedRoleKey] ?? 2; // default Member nếu gửi bậy
 
-  const passwordHash = await bcrypt.hash(password, 10);
-  const newUser = await createUserWithProfile({
-    email,
-    passwordHash,
-    phone,
-    fullName,
-    cognitoSub: userSub,
-    roleId: desiredRoleId, // 👈 NEW: truyền roleId xuống model
-  });
+  // Tạo user trong database
+  let newUser;
+  try {
+    const passwordHash = await bcrypt.hash(password, 10);
+    newUser = await createUserWithProfile({
+      email,
+      passwordHash,
+      phone,
+      fullName,
+      cognitoSub: userSub,
+      roleId: desiredRoleId, // 👈 NEW: truyền roleId xuống model
+    });
+  } catch (dbErr) {
+    console.error("Database create user error:", dbErr);
+    
+    // Nếu lỗi database nhưng Cognito đã tạo user, cần rollback Cognito user
+    // Hoặc ít nhất log để admin biết có orphaned Cognito user
+    console.error(
+      `WARNING: Cognito user created (${userSub}) but database insert failed. ` +
+      `Email: ${email}. This user may need manual cleanup.`
+    );
+    
+    const e = new Error(
+      `Database error: ${dbErr.message || "Failed to create user in database"}`
+    );
+    e.statusCode = 500;
+    e.errors = dbErr;
+    e.cognitoUserSub = userSub; // Include để có thể cleanup sau
+    throw e;
+  }
 
   return {
     user: {
