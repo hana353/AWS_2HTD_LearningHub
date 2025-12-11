@@ -4,12 +4,138 @@
 import apiClient from './https';
 
 /**
- * Upload file bài giảng (video, PDF, etc.)
+ * Upload file bài giảng (video, PDF, etc.) - SỬ DỤNG PRESIGNED URL
+ * Upload trực tiếp lên S3, không qua backend để tránh corrupt binary data
  * @param {File} file - File cần upload
  * @param {string} courseId - ID của khóa học
  * @returns {Promise<{s3Key: string, url: string, filename: string, contentType: string, size: number}>}
  */
 export async function uploadLectureFile(file, courseId) {
+  if (!file) {
+    throw new Error('File is required');
+  }
+  if (!courseId) {
+    throw new Error('courseId is required');
+  }
+
+  // Validate file object
+  if (!(file instanceof File) && !(file instanceof Blob)) {
+    console.error('[uploadLectureFile] Invalid file object:', {
+      type: typeof file,
+      constructor: file?.constructor?.name,
+      file: file,
+    });
+    throw new Error('Invalid file: file must be a File or Blob object');
+  }
+
+  // Validate file size
+  if (file.size === 0) {
+    throw new Error('File is empty');
+  }
+
+  // Validate file size limit (500MB)
+  const maxSize = 500 * 1024 * 1024; // 500MB
+  if (file.size > maxSize) {
+    throw new Error(`File size exceeds limit of ${(maxSize / 1024 / 1024).toFixed(0)}MB`);
+  }
+
+  // Log file info để debug
+  console.log('[uploadLectureFile] Uploading file with presigned URL:', {
+    name: file.name,
+    type: file.type,
+    size: file.size,
+    lastModified: file.lastModified,
+    isFile: file instanceof File,
+    isBlob: file instanceof Blob,
+    constructor: file.constructor.name,
+    courseId: courseId,
+  });
+
+  // Validate file type cho video/PDF
+  if (file.type && !file.type.startsWith('video/') && !file.type.includes('pdf')) {
+    console.warn('[uploadLectureFile] Warning: File type may not be video or PDF:', file.type);
+  }
+
+  try {
+    // Bước 1: Lấy presigned URL từ backend
+    const presignedRes = await apiClient.post('/api/upload/presigned-upload-url', {
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      prefix: 'lectures',
+      courseId: courseId,
+    });
+
+    const presignedData = presignedRes.data?.data || presignedRes.data;
+    if (!presignedData || !presignedData.presignedUrl || !presignedData.s3Key) {
+      throw new Error('Failed to get presigned URL from backend');
+    }
+
+    const { presignedUrl, s3Key, publicUrl } = presignedData;
+
+    console.log('[uploadLectureFile] Got presigned URL, uploading to S3:', {
+      s3Key,
+      expiresIn: presignedData.expiresIn,
+    });
+
+    // Bước 2: Upload trực tiếp lên S3 bằng presigned URL
+    // QUAN TRỌNG: 
+    // - Dùng PUT method
+    // - Body là File object trực tiếp (không transform)
+    // - Chỉ set Content-Type header (metadata như CacheControl, ContentDisposition đã được encode trong presigned URL signature)
+    const uploadRes = await fetch(presignedUrl, {
+      method: 'PUT',
+      body: file, // File object trực tiếp, không modify
+      headers: {
+        'Content-Type': file.type || 'application/octet-stream',
+        // Metadata (CacheControl, ContentDisposition) đã được encode vào presigned URL signature
+        // S3 sẽ tự động apply metadata khi file được upload thành công
+      },
+    });
+
+    if (!uploadRes.ok) {
+      const errorText = await uploadRes.text();
+      console.error('[uploadLectureFile] S3 upload error:', {
+        status: uploadRes.status,
+        statusText: uploadRes.statusText,
+        error: errorText,
+      });
+      throw new Error(`Failed to upload to S3: ${uploadRes.status} ${uploadRes.statusText}`);
+    }
+
+    console.log('[uploadLectureFile] Upload successful:', {
+      s3Key,
+      url: publicUrl,
+    });
+
+    // Bước 3: Trả về kết quả với format giống như API cũ
+    return {
+      s3Key,
+      url: publicUrl,
+      filename: file.name,
+      contentType: file.type || 'application/octet-stream',
+      size: file.size,
+    };
+  } catch (error) {
+    console.error('[uploadLectureFile] Upload error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
+    
+    // Handle specific error messages
+    if (error.response?.data?.message) {
+      throw new Error(error.response.data.message);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Upload file bài giảng (DEPRECATED - sử dụng presigned URL trong uploadLectureFile)
+ * Giữ lại để backward compatibility nếu cần
+ * @deprecated Sử dụng uploadLectureFile với presigned URL
+ */
+export async function uploadLectureFileLegacy(file, courseId) {
   if (!file) {
     throw new Error('File is required');
   }

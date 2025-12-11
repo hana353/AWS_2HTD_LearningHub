@@ -444,11 +444,13 @@ export const uploadImage = async (req, res) => {
 /**
  * POST /api/upload/presigned-upload-url
  * Generate presigned URL để frontend upload trực tiếp lên S3
- * Body: { filename, contentType, prefix? }
+ * Body: { filename, contentType, prefix?, courseId? }
+ * - prefix: 'avatars' | 'lectures' | 'flashcards' | ...
+ * - courseId: required nếu prefix='lectures'
  */
 export const getPresignedUploadUrl = async (req, res) => {
   try {
-    const { filename, contentType, prefix = 'avatars' } = req.body;
+    const { filename, contentType, prefix = 'avatars', courseId, setId } = req.body;
 
     if (!filename || !contentType) {
       return res.status(400).json({
@@ -456,26 +458,82 @@ export const getPresignedUploadUrl = async (req, res) => {
       });
     }
 
-    // Validate content type cho avatar
-    if (prefix === 'avatars' && !contentType.startsWith('image/')) {
-      return res.status(400).json({
-        message: 'Only image files are allowed for avatar',
-      });
+    // Validate content type và prefix
+    if (prefix === 'avatars') {
+      if (!contentType.startsWith('image/')) {
+        return res.status(400).json({
+          message: 'Only image files are allowed for avatar',
+        });
+      }
+    } else if (prefix === 'lectures') {
+      // Lecture: cho phép video và PDF
+      if (!contentType.startsWith('video/') && contentType !== 'application/pdf') {
+        return res.status(400).json({
+          message: 'Only video files and PDFs are allowed for lecture',
+        });
+      }
+      // CourseId bắt buộc cho lecture
+      if (!courseId) {
+        return res.status(400).json({
+          message: 'courseId is required for lecture upload',
+        });
+      }
+    } else if (prefix === 'flashcards') {
+      // Flashcard: cho phép image và audio
+      if (!contentType.startsWith('image/') && !contentType.startsWith('audio/')) {
+        return res.status(400).json({
+          message: 'Only image and audio files are allowed for flashcard',
+        });
+      }
+      if (!setId) {
+        return res.status(400).json({
+          message: 'setId is required for flashcard upload',
+        });
+      }
     }
 
-    // Generate S3 key
-    const s3Key = getS3Key(prefix, filename);
+    // Generate S3 key dựa trên prefix
+    let s3Key;
+    if (prefix === 'lectures') {
+      // Format: lectures/{courseId}/{filename}
+      s3Key = getS3Key(`lectures/${courseId}`, filename);
+    } else if (prefix === 'flashcards') {
+      // Format: flashcards/{setId}/{image|audio}/{filename}
+      const fileType = contentType.startsWith('image/') ? 'image' : 'audio';
+      s3Key = getS3Key(`flashcards/${setId}/${fileType}`, filename);
+    } else {
+      // Default: prefix/{filename}
+      s3Key = getS3Key(prefix, filename);
+    }
 
-    // Generate presigned URL
-    const presignedUrl = await generatePresignedUploadUrl(s3Key, contentType, 300); // 5 phút
+    // Generate presigned URL với thời gian hết hạn phù hợp
+    // 10 phút cho lecture (file lớn), 5 phút cho các file khác
+    const expiresIn = prefix === 'lectures' ? 600 : 300;
+    const presignedUrl = await generatePresignedUploadUrl(s3Key, contentType, expiresIn);
 
     // Get public URL
     const publicUrl = getS3Url(s3Key);
+
+    // Xác định metadata cần set cho file (nếu có)
+    const metadata = {};
+    if (contentType.startsWith('video/')) {
+      metadata.CacheControl = 'public, max-age=31536000, immutable';
+      metadata.ContentDisposition = 'inline';
+    } else if (contentType.startsWith('image/')) {
+      metadata.CacheControl = 'public, max-age=31536000, immutable';
+    } else if (contentType === 'application/pdf') {
+      metadata.CacheControl = 'public, max-age=86400';
+      metadata.ContentDisposition = 'inline';
+    }
 
     console.log('[getPresignedUploadUrl] Generated presigned URL for upload:', {
       s3Key,
       contentType,
       prefix,
+      courseId: courseId || null,
+      setId: setId || null,
+      expiresIn,
+      metadata,
     });
 
     return res.status(200).json({
@@ -484,7 +542,8 @@ export const getPresignedUploadUrl = async (req, res) => {
         s3Key,
         presignedUrl,
         publicUrl,
-        expiresIn: 300, // 5 phút
+        expiresIn,
+        metadata, // Trả về metadata để frontend set headers khi upload
       },
     });
   } catch (err) {
