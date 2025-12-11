@@ -55,18 +55,18 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
     contentDisposition = 'inline';
   }
 
-  // Đảm bảo buffer không bị modify - tạo copy nếu cần
-  // QUAN TRỌNG: Tạo một Buffer copy mới để đảm bảo không bị modify
-  // Buffer.from() tạo shallow copy, nhưng đủ để đảm bảo data integrity
-  const safeBuffer = Buffer.from(fileBuffer);
+  // QUAN TRỌNG: Dùng trực tiếp buffer từ multer, không tạo copy
+  // Buffer.from() có thể gây vấn đề với binary data
+  // Multer đã cung cấp buffer sẵn, chỉ cần dùng trực tiếp
+  // Đảm bảo không có encoding nào được áp dụng
   
   const commandParams = {
     Bucket: S3_BUCKET_NAME,
     Key: key,
-    Body: safeBuffer, // Dùng copy để đảm bảo không bị modify
+    Body: fileBuffer, // Dùng trực tiếp buffer từ multer
     ContentType: normalizedContentType,
-    // Đảm bảo binary data được xử lý đúng - không encode
-    // Không set ContentEncoding để đảm bảo file giữ nguyên format
+    // KHÔNG set ContentEncoding để đảm bảo binary data giữ nguyên
+    // S3 sẽ tự động xử lý binary data đúng cách
   };
 
   // Chỉ thêm metadata nếu có
@@ -77,12 +77,12 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
     commandParams.ContentDisposition = contentDisposition;
   }
 
-  // Validate buffer integrity - kiểm tra checksum đơn giản
-  const bufferSize = safeBuffer.length;
-  const firstBytes = safeBuffer.slice(0, Math.min(16, bufferSize));
-  const lastBytes = safeBuffer.slice(Math.max(0, bufferSize - 16), bufferSize);
+  // Validate buffer integrity - kiểm tra magic bytes để đảm bảo file không bị corrupt
+  const bufferSize = fileBuffer.length;
+  const firstBytes = fileBuffer.slice(0, Math.min(16, bufferSize));
+  const lastBytes = fileBuffer.slice(Math.max(0, bufferSize - 16), bufferSize);
   
-  // Validate video file signature (magic bytes) để đảm bảo file không bị corrupt
+  // Validate video file signature (magic bytes)
   if (normalizedContentType.startsWith('video/')) {
     const videoSignatures = {
       'video/mp4': [0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70], // MP4: ftyp
@@ -92,16 +92,24 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
     };
     
     const signature = Array.from(firstBytes.slice(0, 8));
-    const isValidVideo = Object.values(videoSignatures).some(sig => 
-      sig.every((byte, i) => signature[i] === byte)
-    ) || normalizedContentType === 'video/mp4' || normalizedContentType === 'video/quicktime';
+    // MP4 có thể bắt đầu ở offset khác nhau, kiểm tra trong 12 bytes đầu
+    const isValidVideo = Object.values(videoSignatures).some(sig => {
+      // Tìm signature trong 12 bytes đầu (MP4 có thể có offset)
+      for (let offset = 0; offset <= 4; offset++) {
+        if (signature.length >= sig.length + offset) {
+          const matches = sig.every((byte, i) => signature[i + offset] === byte);
+          if (matches) return true;
+        }
+      }
+      return false;
+    });
     
     if (!isValidVideo && bufferSize > 8) {
-      console.warn('[uploadFileToS3] Video file signature may be invalid:', {
+      console.warn('[uploadFileToS3] Video file signature check failed:', {
         contentType: normalizedContentType,
         firstBytes: firstBytes.toString('hex'),
-        expected: videoSignatures[normalizedContentType]?.map(b => b.toString(16)).join(' '),
       });
+      // Không fail upload vì một số video có thể có format khác
     }
   }
   
@@ -114,7 +122,7 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
     cacheControl,
     contentDisposition,
     bufferInfo: {
-      isBuffer: Buffer.isBuffer(safeBuffer),
+      isBuffer: Buffer.isBuffer(fileBuffer),
       length: bufferSize,
       firstBytes: firstBytes.toString('hex').substring(0, 32),
       lastBytes: lastBytes.toString('hex').substring(0, 32),

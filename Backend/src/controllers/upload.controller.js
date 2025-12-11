@@ -6,6 +6,7 @@ import { uploadFileToS3, deleteFileFromS3, generatePresignedDownloadUrl, generat
 import { getS3Key, getS3Url } from '../config/s3.js';
 
 // Cấu hình multer để lưu file vào memory (không lưu vào disk)
+// QUAN TRỌNG: memoryStorage() giữ nguyên binary data, không encode
 const storage = multer.memoryStorage();
 
 // Filter file types
@@ -67,12 +68,14 @@ const uploadAvatarConfig = multer({
 });
 
 // Upload config cho các file khác: giới hạn lớn hơn (500MB)
+// QUAN TRỌNG: preservePath: false để đảm bảo filename được xử lý đúng
 const upload = multer({
   storage,
   fileFilter,
   limits: {
     fileSize: 500 * 1024 * 1024, // 500MB max
   },
+  preservePath: false, // Đảm bảo filename không có path prefix
 });
 
 // Middleware để upload single file (dùng cho lecture, flashcard, image)
@@ -90,7 +93,16 @@ export const uploadMultiple = upload.array('files', 10); // Max 10 files
  */
 export const uploadLectureFile = async (req, res) => {
   try {
+    // Debug: Log request headers để kiểm tra Content-Type
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[uploadLectureFile] Request headers:', {
+        'content-type': req.headers['content-type'],
+        'content-length': req.headers['content-length'],
+      });
+    }
+
     if (!req.file) {
+      console.error('[uploadLectureFile] No file in request');
       return res.status(400).json({ message: 'No file provided' });
     }
 
@@ -101,7 +113,11 @@ export const uploadLectureFile = async (req, res) => {
 
     // Validate file buffer
     if (!req.file.buffer || !Buffer.isBuffer(req.file.buffer)) {
-      console.error('[uploadLectureFile] Invalid file buffer');
+      console.error('[uploadLectureFile] Invalid file buffer:', {
+        hasBuffer: !!req.file.buffer,
+        isBuffer: req.file.buffer ? Buffer.isBuffer(req.file.buffer) : false,
+        bufferType: typeof req.file.buffer,
+      });
       return res.status(400).json({ message: 'Invalid file: buffer is corrupted' });
     }
     
@@ -112,6 +128,7 @@ export const uploadLectureFile = async (req, res) => {
     
     // Validate video file magic bytes để đảm bảo file không bị corrupt
     const firstBytes = req.file.buffer.slice(0, Math.min(16, req.file.buffer.length));
+    const lastBytes = req.file.buffer.slice(Math.max(0, req.file.buffer.length - 16));
     const isVideo = req.file.mimetype.startsWith('video/');
     
     // Log file info để debug
@@ -122,6 +139,7 @@ export const uploadLectureFile = async (req, res) => {
       bufferSize: req.file.buffer.length,
       bufferType: Buffer.isBuffer(req.file.buffer) ? 'Buffer' : typeof req.file.buffer,
       firstBytes: firstBytes.toString('hex').substring(0, 32),
+      lastBytes: lastBytes.toString('hex').substring(0, 32),
       courseId,
     });
     

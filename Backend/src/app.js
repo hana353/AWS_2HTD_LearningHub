@@ -74,12 +74,19 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // JSON parser - exclude upload routes để tránh ảnh hưởng đến binary data
+// QUAN TRỌNG: Multer cần parse multipart/form-data, không được parse body trước
 app.use((req, res, next) => {
   // Skip JSON parsing cho upload routes (multipart/form-data)
+  // Multer sẽ tự xử lý parsing cho routes này
   if (req.path.startsWith('/api/upload') && req.method === 'POST') {
+    // Log để debug
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[app.js] Skipping JSON parser for upload route:', req.path);
+    }
     return next();
   }
-  express.json()(req, res, next);
+  // Chỉ parse JSON cho các routes khác
+  express.json({ limit: '50mb' })(req, res, next);
 });
 
 // Health check
