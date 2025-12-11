@@ -38,6 +38,10 @@ const ROLE_KEY_TO_ID = {
   teacher: 3,
 };
 
+// Admin email - tự động gán role Admin khi đăng ký
+const ADMIN_EMAIL = "phamminhtuan171204@gmail.com";
+const ADMIN_ROLE_ID = 4;
+
 // Đăng ký
 export async function register({ email, password, fullName, phone, role }) {
   const existing = await findUserByEmail(email);
@@ -76,9 +80,18 @@ export async function register({ email, password, fullName, phone, role }) {
     throw e;
   }
 
-  // 👉 NEW: xử lý role FE gửi lên
-  const normalizedRoleKey = (role || "").toLowerCase(); // "member" | "teacher"
-  const desiredRoleId = ROLE_KEY_TO_ID[normalizedRoleKey] ?? 2; // default Member nếu gửi bậy
+  // 👉 Xử lý role: Check email đặc biệt để gán Admin
+  let desiredRoleId;
+  
+  // Nếu email là admin email → cố định role Admin
+  if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    desiredRoleId = ADMIN_ROLE_ID;
+    console.log(`[Register] Admin email detected: ${email}. Assigning Admin role.`);
+  } else {
+    // Xử lý role FE gửi lên (member hoặc teacher)
+    const normalizedRoleKey = (role || "").toLowerCase(); // "member" | "teacher"
+    desiredRoleId = ROLE_KEY_TO_ID[normalizedRoleKey] ?? 2; // default Member nếu gửi bậy
+  }
 
   // Tạo user trong database
   let newUser;
@@ -90,7 +103,7 @@ export async function register({ email, password, fullName, phone, role }) {
       phone,
       fullName,
       cognitoSub: userSub,
-      roleId: desiredRoleId, // 👈 NEW: truyền roleId xuống model
+      roleId: desiredRoleId, // 👈 Truyền roleId xuống model (có thể là Admin nếu email đặc biệt)
     });
   } catch (dbErr) {
     console.error("Database create user error:", dbErr);
@@ -212,15 +225,25 @@ export async function login({ email, password }) {
     console.log(`[Auto-sync] User ${email} exists in Cognito but not in local DB. Creating user...`);
     
     try {
+      // Check email đặc biệt để gán Admin role
+      const userEmail = cognitoEmail || email;
+      const autoRoleId = userEmail.toLowerCase() === ADMIN_EMAIL.toLowerCase() 
+        ? ADMIN_ROLE_ID 
+        : 2; // Default: Member role
+      
+      if (autoRoleId === ADMIN_ROLE_ID) {
+        console.log(`[Auto-sync] Admin email detected: ${userEmail}. Assigning Admin role.`);
+      }
+      
       // Tạo user mới với thông tin từ Cognito
       // Không có password hash vì password được quản lý bởi Cognito
       const newUser = await createUserWithProfile({
-        email: cognitoEmail || email,
+        email: userEmail,
         passwordHash: null, // Password được quản lý bởi Cognito
         phone: cognitoPhone || null,
         fullName: cognitoFullName || null,
         cognitoSub: cognitoSub,
-        roleId: 2, // Default: Member role
+        roleId: autoRoleId, // Admin nếu email đặc biệt, Member mặc định
       });
       
       user = await findUserByEmail(email);

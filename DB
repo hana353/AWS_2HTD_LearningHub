@@ -1,0 +1,354 @@
+-- =========================
+-- Xóa database nếu tồn tại
+-- =========================
+USE master;
+GO
+
+IF EXISTS (SELECT * FROM sys.databases WHERE name = '2HTD_LearningHub')
+BEGIN
+    ALTER DATABASE [2HTD_LearningHub] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+    DROP DATABASE [2HTD_LearningHub];
+END
+GO
+
+-- =========================
+-- Tạo database mới hỗ trợ Unicode
+-- =========================
+CREATE DATABASE [2HTD_LearningHub]
+COLLATE SQL_Latin1_General_CP1254_CI_AS;
+GO
+
+USE [2HTD_LearningHub];
+GO
+
+-- =========================
+-- Bảng Roles
+-- =========================
+CREATE TABLE roles (
+    id SMALLINT PRIMARY KEY,
+    name NVARCHAR(100) NOT NULL UNIQUE
+);
+GO
+INSERT INTO roles (id, name) VALUES
+(1, N'Guest'),
+(2, N'Member'),
+(3, N'Teacher'),
+(4, N'Admin');
+GO
+
+
+
+-- =========================
+-- Bảng Users
+-- =========================
+CREATE TABLE users (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    email NVARCHAR(255) NOT NULL UNIQUE,
+    email_verified BIT DEFAULT 0,
+    phone NVARCHAR(50),
+    password_hash NVARCHAR(MAX),
+    cognito_sub NVARCHAR(255) UNIQUE,
+    role_id SMALLINT NOT NULL REFERENCES roles(id),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    is_active BIT DEFAULT 1
+);
+GO
+
+-- =========================
+-- Bảng User Profiles
+-- =========================
+CREATE TABLE user_profiles (
+    user_id UNIQUEIDENTIFIER PRIMARY KEY 
+        REFERENCES users(id) ON DELETE CASCADE,
+    full_name NVARCHAR(255),
+    avatar_s3_key NVARCHAR(MAX),
+    bio NVARCHAR(MAX),
+    timezone NVARCHAR(50),
+    locale NVARCHAR(50),
+    metadata NVARCHAR(MAX)
+);
+GO
+
+-- =========================
+-- Bảng Courses
+-- =========================
+CREATE TABLE courses (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    slug NVARCHAR(255) NOT NULL UNIQUE,
+    title NVARCHAR(255) NOT NULL,
+    short_description NVARCHAR(MAX),
+    description NVARCHAR(MAX),
+    price DECIMAL(10,2) DEFAULT 0,
+    currency NVARCHAR(3) DEFAULT N'USD',
+    creator_id UNIQUEIDENTIFIER NOT NULL REFERENCES users(id),
+    published BIT DEFAULT 0,
+    published_at DATETIMEOFFSET,
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Lectures
+-- =========================
+CREATE TABLE lectures (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    course_id UNIQUEIDENTIFIER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    title NVARCHAR(255) NOT NULL,
+    content_type NVARCHAR(20) NOT NULL,
+    s3_key NVARCHAR(MAX),
+    duration_seconds INT,
+    order_index INT DEFAULT 0,
+    published BIT DEFAULT 1,
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Tags
+-- =========================
+CREATE TABLE tags (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    name NVARCHAR(100) NOT NULL UNIQUE
+);
+GO
+
+-- =========================
+-- Bảng Course Tags
+-- =========================
+CREATE TABLE course_tags (
+    course_id UNIQUEIDENTIFIER REFERENCES courses(id) ON DELETE CASCADE,
+    tag_id INT REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY(course_id, tag_id)
+);
+GO
+
+-- =========================
+-- Bảng Enrollments
+-- =========================
+CREATE TABLE enrollments (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id UNIQUEIDENTIFIER NOT NULL REFERENCES users(id),
+    course_id UNIQUEIDENTIFIER NOT NULL REFERENCES courses(id),
+    enrolled_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    status NVARCHAR(20) DEFAULT N'active',
+    progress_percent DECIMAL(5,2) DEFAULT 0,
+    CONSTRAINT UQ_user_course UNIQUE(user_id, course_id)
+);
+GO
+
+-- =========================
+-- Bảng Lecture Progress
+-- =========================
+CREATE TABLE lecture_progress (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id UNIQUEIDENTIFIER NOT NULL REFERENCES users(id),
+    lecture_id UNIQUEIDENTIFIER NOT NULL REFERENCES lectures(id),
+    watched_seconds INT DEFAULT 0,
+    completed BIT DEFAULT 0,
+    last_watch_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    CONSTRAINT UQ_user_lecture UNIQUE(user_id, lecture_id)
+);
+GO
+
+-- =========================
+-- Bảng Questions
+-- =========================
+CREATE TABLE questions (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    author_id UNIQUEIDENTIFIER REFERENCES users(id),
+    title NVARCHAR(255),
+    body NVARCHAR(MAX),
+    type NVARCHAR(20) NOT NULL,
+    choices NVARCHAR(MAX),
+    difficulty SMALLINT,
+    tags NVARCHAR(MAX),
+    image_s3_key NVARCHAR(MAX),
+    audio_s3_key NVARCHAR(MAX),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Exams
+-- =========================
+CREATE TABLE exams (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    course_id UNIQUEIDENTIFIER REFERENCES courses(id) ON DELETE CASCADE,
+    title NVARCHAR(255) NOT NULL,
+    description NVARCHAR(MAX),
+    duration_minutes INT,
+    passing_score DECIMAL(5,2),
+    randomize_questions BIT DEFAULT 0,
+    created_by UNIQUEIDENTIFIER REFERENCES users(id),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    published BIT DEFAULT 0,
+    updated_at DATETIMEOFFSET NULL
+);
+GO
+
+-- =========================
+-- Bảng Exam Questions
+-- =========================
+CREATE TABLE exam_questions (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    exam_id UNIQUEIDENTIFIER REFERENCES exams(id) ON DELETE CASCADE,
+    question_id UNIQUEIDENTIFIER REFERENCES questions(id),
+    points DECIMAL(6,2) DEFAULT 1,
+    sequence INT DEFAULT 0
+);
+GO
+
+-- =========================
+-- Bảng Submissions
+-- =========================
+CREATE TABLE submissions (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    exam_id UNIQUEIDENTIFIER REFERENCES exams(id),
+    user_id UNIQUEIDENTIFIER REFERENCES users(id),
+    started_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    submitted_at DATETIMEOFFSET,
+    duration_seconds INT,
+    total_score DECIMAL(8,2) DEFAULT 0,
+    status NVARCHAR(20) DEFAULT N'in_progress',
+    auto_graded BIT DEFAULT 1,
+    result NVARCHAR(MAX),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Submission Items
+-- =========================
+CREATE TABLE submission_items (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    submission_id UNIQUEIDENTIFIER REFERENCES submissions(id) ON DELETE CASCADE,
+    question_id UNIQUEIDENTIFIER REFERENCES questions(id),
+    answer NVARCHAR(MAX),
+    awarded_points DECIMAL(6,2) DEFAULT 0,
+    graded BIT DEFAULT 0,
+    grader_id UNIQUEIDENTIFIER REFERENCES users(id),
+    graded_at DATETIMEOFFSET
+);
+GO
+
+-- =========================
+-- Bảng Flashcard Decks
+-- =========================
+CREATE TABLE flashcard_decks (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    owner_id UNIQUEIDENTIFIER REFERENCES users(id),
+    title NVARCHAR(255),
+    description NVARCHAR(MAX),
+    category NVARCHAR(50),
+    topic NVARCHAR(255),
+    language NVARCHAR(20),
+    course_id UNIQUEIDENTIFIER REFERENCES courses(id),
+    published BIT DEFAULT 0,
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Flashcards
+-- =========================
+CREATE TABLE flashcards (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    deck_id UNIQUEIDENTIFIER REFERENCES flashcard_decks(id) ON DELETE CASCADE,
+    front NVARCHAR(MAX),
+    back NVARCHAR(MAX),
+    example NVARCHAR(MAX),
+    image_s3_key NVARCHAR(MAX),
+    audio_s3_key NVARCHAR(MAX),
+    order_index INT DEFAULT 0,
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Flashcard Progress
+-- =========================
+CREATE TABLE flashcard_progress (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id UNIQUEIDENTIFIER REFERENCES users(id),
+    flashcard_id UNIQUEIDENTIFIER REFERENCES flashcards(id),
+    efactor DECIMAL(5,2) DEFAULT 2.5,
+    interval_days INT DEFAULT 0,
+    next_review_at DATETIMEOFFSET,
+    ease_count INT DEFAULT 0,
+    CONSTRAINT UQ_user_flashcard UNIQUE(user_id, flashcard_id)
+);
+GO
+
+-- =========================
+-- Bảng Live Classes
+-- =========================
+CREATE TABLE live_classes (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    course_id UNIQUEIDENTIFIER REFERENCES courses(id) ON DELETE CASCADE,
+    host_id UNIQUEIDENTIFIER REFERENCES users(id),
+    title NVARCHAR(255),
+    scheduled_at DATETIMEOFFSET,
+    duration_minutes INT,
+    meeting_metadata NVARCHAR(MAX),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+    status NVARCHAR(20) DEFAULT N'scheduled'
+);
+GO
+
+-- =========================
+-- Bảng Live Class Participants
+-- =========================
+CREATE TABLE live_class_participants (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    live_class_id UNIQUEIDENTIFIER REFERENCES live_classes(id) ON DELETE CASCADE,
+    user_id UNIQUEIDENTIFIER REFERENCES users(id),
+    joined_at DATETIMEOFFSET,
+    left_at DATETIMEOFFSET
+);
+GO
+
+-- =========================
+-- Bảng Notifications
+-- =========================
+CREATE TABLE notifications (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id UNIQUEIDENTIFIER REFERENCES users(id),
+    type NVARCHAR(50),
+    payload NVARCHAR(MAX),
+    is_read BIT DEFAULT 0,
+    send_channel NVARCHAR(50),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Payments
+-- =========================
+CREATE TABLE payments (
+    id UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWID(),
+    user_id UNIQUEIDENTIFIER REFERENCES users(id),
+    course_id UNIQUEIDENTIFIER REFERENCES courses(id),
+    amount DECIMAL(10,2),
+    currency NVARCHAR(3),
+    gateway NVARCHAR(100),
+    gateway_ref NVARCHAR(255),
+    status NVARCHAR(20),
+    created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+GO
+
+-- =========================
+-- Bảng Course Teachers
+-- =========================
+CREATE TABLE course_teachers (
+    course_id UNIQUEIDENTIFIER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+    teacher_id UNIQUEIDENTIFIER NOT NULL REFERENCES users(id),
+    CONSTRAINT PK_course_teachers PRIMARY KEY (course_id, teacher_id)
+);
+GO
+
+
