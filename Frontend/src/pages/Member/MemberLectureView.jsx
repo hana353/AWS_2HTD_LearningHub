@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, Play } from "lucide-react";
 import { getLectureDetail, updateLectureProgress } from "../../services/memberService";
-import { getPresignedUrl } from "../../services/uploadService";
 import { toast } from "react-toastify";
 
 export default function MemberLectureView() {
@@ -33,31 +32,54 @@ export default function MemberLectureView() {
         setLecture(lectureData);
 
         // Lấy URL cho video - Backend đã trả về URL đầy đủ (giống avatar)
+        let finalVideoUrl = null;
+        
         if (lectureData?.url) {
-          // Backend đã tạo URL đầy đủ từ s3Key bằng getS3Url(), dùng trực tiếp
-          console.log("Using video URL from backend:", lectureData.url);
-          setVideoUrl(lectureData.url);
+          // Backend đã tạo URL đầy đủ từ s3Key bằng getS3Url()
+          finalVideoUrl = lectureData.url;
+          console.log("Using video URL from backend:", finalVideoUrl);
         } else if (lectureData?.s3Key) {
           // Fallback: Nếu backend chưa có URL (tương thích ngược)
-          // Tạo URL tương tự như backend getS3Url()
           const s3Key = lectureData.s3Key;
-          let videoUrlToUse = null;
           
           if (s3Key.startsWith('http://') || s3Key.startsWith('https://')) {
-            // Đã là URL đầy đủ
-            videoUrlToUse = s3Key;
+            // Đã là URL đầy đủ - clean nếu có presigned query string
+            try {
+              const url = new URL(s3Key);
+              if (url.search && url.search.includes('X-Amz-')) {
+                // Remove presigned query string, chỉ dùng public URL
+                finalVideoUrl = `${url.protocol}//${url.host}${url.pathname}`;
+                console.log("Cleaned presigned URL to public URL:", finalVideoUrl);
+              } else {
+                finalVideoUrl = s3Key;
+              }
+            } catch (err) {
+              finalVideoUrl = s3Key;
+            }
           } else {
             // Tạo public URL từ s3Key (giống getS3Url trong backend)
             const cleanKey = s3Key.startsWith('/') ? s3Key.substring(1) : s3Key;
-            videoUrlToUse = `https://learninghub-app-bucket.s3.ap-southeast-1.amazonaws.com/${cleanKey}`;
+            finalVideoUrl = `https://learninghub-app-bucket.s3.ap-southeast-1.amazonaws.com/${cleanKey}`;
+            console.log("Fallback: Generated video URL from s3Key:", finalVideoUrl);
           }
-          
-          console.log("Fallback: Generated video URL from s3Key:", videoUrlToUse);
-          setVideoUrl(videoUrlToUse);
         } else {
           console.error("No URL or s3Key in lecture data:", lectureData);
           setError("Bài giảng không có file video");
+          return;
         }
+        
+        // Đảm bảo URL không có presigned query string (bucket đang public)
+        if (finalVideoUrl && finalVideoUrl.includes('X-Amz-')) {
+          try {
+            const url = new URL(finalVideoUrl);
+            finalVideoUrl = `${url.protocol}//${url.host}${url.pathname}`;
+            console.log("Removed presigned query string, using public URL:", finalVideoUrl);
+          } catch (err) {
+            console.error("Error cleaning URL:", err);
+          }
+        }
+        
+        setVideoUrl(finalVideoUrl);
       } catch (err) {
         console.error("Error fetching lecture:", err);
         setError(err?.message || "Không thể tải thông tin bài giảng.");
@@ -155,36 +177,41 @@ export default function MemberLectureView() {
                   className="w-full h-auto max-h-[80vh]"
                   style={{ objectFit: 'contain' }}
                   src={videoUrl}
-                  onError={async (e) => {
+                  onError={(e) => {
                     const video = e.target;
                     const error = video.error;
+                    
+                    // Prevent infinite loop - chỉ log error một lần
+                    if (video.dataset.errorLogged === 'true') {
+                      return;
+                    }
+                    video.dataset.errorLogged = 'true';
+                    
                     console.error("Video error:", {
                       code: error?.code,
                       message: error?.message,
                       networkState: video.networkState,
                       readyState: video.readyState,
-                      src: videoUrl.substring(0, 100) + "...",
-                      currentSrc: video.currentSrc,
+                      src: videoUrl?.substring(0, 100) + "...",
+                      currentSrc: video.currentSrc?.substring(0, 100) + "...",
                       videoWidth: video.videoWidth,
                       videoHeight: video.videoHeight,
                     });
                     
-                    // Nếu là lỗi MEDIA_ERR_SRC_NOT_SUPPORTED và đang dùng public URL, thử presigned URL
-                    if (error?.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED && lecture?.s3Key) {
-                      const s3Key = lecture.s3Key;
-                      if (!s3Key.startsWith('http://') && !s3Key.startsWith('https://')) {
-                        console.log("Trying presigned URL as fallback for video dọc");
-                        try {
-                          const result = await getPresignedUrl(s3Key, 3600);
-                          const presignedUrl = result?.url || result;
-                          if (presignedUrl && typeof presignedUrl === 'string') {
-                            console.log("Switching to presigned URL");
-                            video.src = presignedUrl;
-                            return; // Không hiển thị lỗi nếu đang thử presigned URL
-                          }
-                        } catch (presignedError) {
-                          console.error("Presigned URL also failed:", presignedError);
-                        }
+                    // Kiểm tra nếu URL có presigned query string (không nên có khi bucket public)
+                    const currentSrc = video.currentSrc || videoUrl;
+                    if (currentSrc && currentSrc.includes('X-Amz-')) {
+                      console.warn("Video URL contains presigned query string, cleaning it...");
+                      // Thử clean URL (remove query string) để dùng public URL
+                      try {
+                        const url = new URL(currentSrc);
+                        const cleanUrl = `${url.protocol}//${url.host}${url.pathname}`;
+                        console.log("Trying clean public URL:", cleanUrl);
+                        video.src = cleanUrl;
+                        video.dataset.errorLogged = 'false'; // Reset để log lại nếu vẫn lỗi
+                        return;
+                      } catch (urlErr) {
+                        console.error("Error cleaning URL:", urlErr);
                       }
                     }
                     
@@ -202,13 +229,14 @@ export default function MemberLectureView() {
                           break;
                         case error.MEDIA_ERR_SRC_NOT_SUPPORTED:
                           errorMsg += "Định dạng video không được hỗ trợ hoặc URL không hợp lệ.";
-                          console.error("Video URL:", videoUrl);
+                          console.error("Video URL:", currentSrc?.substring(0, 200));
                           break;
                         default:
                           errorMsg += error.message || "Vui lòng thử lại.";
                       }
                     }
                     toast.error(errorMsg);
+                    setError(errorMsg);
                   }}
                   onLoadStart={() => {
                     console.log("Video load started, URL:", videoUrl.substring(0, 100));

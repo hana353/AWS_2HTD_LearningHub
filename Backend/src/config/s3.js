@@ -82,18 +82,42 @@ export function getS3Url(key) {
     return null;
   }
   
-  // Nếu đã là full URL thì return luôn
+  // Nếu đã là full URL, clean nó (remove query string nếu có presigned URL)
   if (key.startsWith('http://') || key.startsWith('https://')) {
-    console.log('[getS3Url] Key is already a URL:', key);
-    return key;
+    try {
+      const url = new URL(key);
+      // Nếu có query string (presigned URL), chỉ lấy pathname và tạo public URL
+      if (url.search && url.search.includes('X-Amz-')) {
+        console.log('[getS3Url] Detected presigned URL, converting to public URL');
+        // Extract key từ pathname
+        const pathKey = url.pathname.substring(1); // Remove leading slash
+        const cleanKey = pathKey.startsWith('/') ? pathKey.substring(1) : pathKey;
+        const publicUrl = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${cleanKey}`;
+        console.log('[getS3Url] Converted presigned to public URL:', {
+          original: key.substring(0, 100) + '...',
+          cleanKey: cleanKey,
+          publicUrl: publicUrl,
+        });
+        return publicUrl;
+      }
+      // Nếu đã là public URL không có query string, return luôn
+      console.log('[getS3Url] Key is already a clean URL:', key);
+      return key;
+    } catch (err) {
+      console.error('[getS3Url] Error parsing URL:', err);
+      // Fallback: return nguyên bản
+      return key;
+    }
   }
   
-  // Đảm bảo key không có leading slash
-  const cleanKey = key.startsWith('/') ? key.substring(1) : key;
+  // Clean key: remove query string nếu có
+  let cleanKey = key.split('?')[0]; // Remove query string
+  cleanKey = cleanKey.startsWith('/') ? cleanKey.substring(1) : cleanKey;
+  
   const url = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${cleanKey}`;
   
   console.log('[getS3Url] Generated URL:', {
-    originalKey: key,
+    originalKey: key.substring(0, 100) + (key.length > 100 ? '...' : ''),
     cleanKey: cleanKey,
     url: url,
   });
