@@ -2,7 +2,8 @@
 // Controller để xử lý upload file lên S3
 
 import multer from 'multer';
-import { uploadFileToS3, deleteFileFromS3, generatePresignedDownloadUrl } from '../services/s3.service.js';
+import { uploadFileToS3, deleteFileFromS3, generatePresignedDownloadUrl, generatePresignedUploadUrl } from '../services/s3.service.js';
+import { getS3Key, getS3Url } from '../config/s3.js';
 
 // Cấu hình multer để lưu file vào memory (không lưu vào disk)
 const storage = multer.memoryStorage();
@@ -34,6 +35,23 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Upload config cho avatar: giới hạn nhỏ hơn (5MB)
+const uploadAvatarConfig = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    // Chỉ cho phép images cho avatar
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed for avatar'), false);
+    }
+  },
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max cho avatar
+  },
+});
+
+// Upload config cho các file khác: giới hạn lớn hơn (500MB)
 const upload = multer({
   storage,
   fileFilter,
@@ -42,8 +60,11 @@ const upload = multer({
   },
 });
 
-// Middleware để upload single file
+// Middleware để upload single file (dùng cho lecture, flashcard, image)
 export const uploadSingle = upload.single('file');
+
+// Middleware để upload avatar (giới hạn 5MB)
+export const uploadAvatarSingle = uploadAvatarConfig.single('file');
 
 // Middleware để upload multiple files
 export const uploadMultiple = upload.array('files', 10); // Max 10 files
@@ -269,6 +290,61 @@ export const uploadImage = async (req, res) => {
     return res.status(500).json({
       message: 'Failed to upload image',
       error: errorMessage,
+    });
+  }
+};
+
+/**
+ * POST /api/upload/presigned-upload-url
+ * Generate presigned URL để frontend upload trực tiếp lên S3
+ * Body: { filename, contentType, prefix? }
+ */
+export const getPresignedUploadUrl = async (req, res) => {
+  try {
+    const { filename, contentType, prefix = 'avatars' } = req.body;
+
+    if (!filename || !contentType) {
+      return res.status(400).json({
+        message: 'filename and contentType are required',
+      });
+    }
+
+    // Validate content type cho avatar
+    if (prefix === 'avatars' && !contentType.startsWith('image/')) {
+      return res.status(400).json({
+        message: 'Only image files are allowed for avatar',
+      });
+    }
+
+    // Generate S3 key
+    const s3Key = getS3Key(prefix, filename);
+
+    // Generate presigned URL
+    const presignedUrl = await generatePresignedUploadUrl(s3Key, contentType, 300); // 5 phút
+
+    // Get public URL
+    const publicUrl = getS3Url(s3Key);
+
+    console.log('[getPresignedUploadUrl] Generated presigned URL for upload:', {
+      s3Key,
+      contentType,
+      prefix,
+    });
+
+    return res.status(200).json({
+      message: 'Presigned URL generated successfully',
+      data: {
+        s3Key,
+        presignedUrl,
+        publicUrl,
+        expiresIn: 300, // 5 phút
+      },
+    });
+  } catch (err) {
+    console.error('getPresignedUploadUrl error:', err);
+    return res.status(500).json({
+      message: 'Failed to generate presigned upload URL',
+      error: err.message,
     });
   }
 };

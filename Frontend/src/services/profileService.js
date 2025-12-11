@@ -47,12 +47,13 @@ export async function updateMyProfile(payload) {
 }
 
 /**
- * Upload image (avatar hoặc image khác)
- * API: POST /api/upload/image
+ * Upload image (avatar hoặc image khác) - Dùng presigned URL để upload trực tiếp lên S3
+ * API: POST /api/upload/presigned-upload-url → Upload lên S3 → Trả về public URL
  * @param {File} file - File ảnh cần upload (image/jpeg, image/jpg, image/png, image/gif, image/webp)
- * @returns {Promise<Object>} { message, urls: [string], folder }
+ * @param {string} prefix - S3 prefix (default: 'avatars')
+ * @returns {Promise<Object>} { s3Key, publicUrl }
  */
-export async function uploadImage(file) {
+export async function uploadImage(file, prefix = 'avatars') {
   if (!file) {
     throw new Error('File is required');
   }
@@ -63,31 +64,59 @@ export async function uploadImage(file) {
     throw new Error('Only image files are allowed');
   }
 
-  // Validate file size (500MB = 500 * 1024 * 1024 bytes)
-  const maxSize = 500 * 1024 * 1024;
+  // Validate file size (5MB cho avatar, 500MB cho các file khác)
+  const maxSize = prefix === 'avatars' ? 5 * 1024 * 1024 : 500 * 1024 * 1024;
   if (file.size > maxSize) {
-    throw new Error('File size exceeds 500MB limit');
+    throw new Error(`File size exceeds ${prefix === 'avatars' ? '5MB' : '500MB'} limit`);
   }
 
-  const formData = new FormData();
-  formData.append('file', file);
-
   try {
-    const res = await apiClient.post('/api/upload/image', formData);
-    const result = res.data;
+    // Bước 1: Lấy presigned URL từ backend
+    const presignedRes = await apiClient.post('/api/upload/presigned-upload-url', {
+      filename: file.name,
+      contentType: file.type,
+      prefix: prefix,
+    });
 
-    // Response format: { message, urls: [...], folder }
-    if (result && result.urls && result.urls.length > 0) {
-      return result;
+    const presignedData = presignedRes.data?.data || presignedRes.data;
+    if (!presignedData || !presignedData.presignedUrl || !presignedData.s3Key) {
+      throw new Error('Failed to get presigned URL');
     }
 
-    throw new Error(result.message || 'Upload failed');
+    const { presignedUrl, s3Key, publicUrl } = presignedData;
+
+    // Bước 2: Upload trực tiếp lên S3 bằng presigned URL
+    const uploadRes = await fetch(presignedUrl, {
+      method: 'PUT',
+      body: file,
+      headers: {
+        'Content-Type': file.type,
+      },
+    });
+
+    if (!uploadRes.ok) {
+      const errorText = await uploadRes.text();
+      console.error('S3 upload error:', errorText);
+      throw new Error(`Failed to upload to S3: ${uploadRes.status} ${uploadRes.statusText}`);
+    }
+
+    // Bước 3: Trả về kết quả với public URL
+    return {
+      message: 'Upload thành công',
+      s3Key,
+      url: publicUrl,
+      urls: [publicUrl],
+      folder: prefix,
+    };
   } catch (error) {
-    // Handle specific error messages from backend
+    // Handle specific error messages
     if (error.response?.data?.message) {
       throw new Error(error.response.data.message);
     }
-    throw error;
+    if (error.message) {
+      throw error;
+    }
+    throw new Error('Upload failed: ' + (error.toString() || 'Unknown error'));
   }
 }
 

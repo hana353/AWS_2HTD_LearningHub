@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import {
   uploadSingle,
+  uploadAvatarSingle,
   uploadMultiple,
   uploadLectureFile,
   uploadAvatar,
@@ -9,6 +10,7 @@ import {
   uploadImage,
   deleteFile,
   getPresignedUrl,
+  getPresignedUploadUrl,
 } from '../controllers/upload.controller.js';
 import { authMiddleware } from '../middlewares/auth.middleware.js';
 
@@ -20,8 +22,8 @@ router.use(authMiddleware);
 // Upload file bài giảng
 router.post('/lecture', uploadSingle, uploadLectureFile);
 
-// Upload avatar
-router.post('/avatar', uploadSingle, uploadAvatar);
+// Upload avatar (dùng uploadAvatarSingle với giới hạn 5MB)
+router.post('/avatar', uploadAvatarSingle, uploadAvatar);
 
 // Upload file flashcard
 router.post('/flashcard', uploadSingle, uploadFlashcardFile);
@@ -34,6 +36,9 @@ router.delete('/:s3Key', deleteFile);
 
 // Get presigned URL để download file private
 router.get('/presigned/:s3Key', getPresignedUrl);
+
+// Get presigned URL để upload file trực tiếp lên S3
+router.post('/presigned-upload-url', getPresignedUploadUrl);
 
 export default router;
 
