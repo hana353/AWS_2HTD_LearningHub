@@ -43,6 +43,25 @@ api.interceptors.response.use(
       err.message ||
       "Request failed";
 
+    // Xử lý 401 Unauthorized - token hết hạn hoặc không hợp lệ
+    if (status === 401) {
+      // Xóa token và redirect về login
+      localStorage.removeItem("token");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("roleId");
+      localStorage.removeItem("userEmail");
+      localStorage.removeItem("userName");
+      localStorage.removeItem("userId");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("access_token");
+      
+      // Chỉ redirect nếu đang ở client-side và không phải đang ở trang login
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
+        window.location.href = '/auth/login';
+      }
+    }
+
     // Create an Error but preserve the original axios response/data for callers
     const out = new Error(`[${status ?? "ERR"}] ${message}`);
     // attach axios response and parsed data so UI can inspect validation details

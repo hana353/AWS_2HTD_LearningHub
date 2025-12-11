@@ -32,6 +32,12 @@ export async function getMyProfile(req, res, next) {
     let avatarUrl = null;
     if (user.avatar_s3_key) {
       avatarUrl = getS3Url(user.avatar_s3_key);
+      console.log('[getMyProfile] Avatar URL generated:', {
+        s3Key: user.avatar_s3_key,
+        url: avatarUrl,
+      });
+    } else {
+      console.log('[getMyProfile] No avatar_s3_key found for user');
     }
 
     return successResponse(res, {
@@ -76,9 +82,14 @@ export async function updateMyProfile(req, res, next) {
       if (avatar && avatar.trim() !== '') {
         // Có URL mới, extract S3 key
         avatarS3Key = extractS3Key(avatar);
+        console.log('[updateMyProfile] Extracted S3 key from URL:', {
+          originalUrl: avatar,
+          extractedKey: avatarS3Key,
+        });
       } else {
         // Avatar là empty string hoặc null, xóa avatar
         avatarS3Key = null;
+        console.log('[updateMyProfile] Avatar will be deleted');
       }
     }
 

@@ -92,6 +92,9 @@ export default function LoginPage() {
             localStorage.setItem('token', token);
             localStorage.setItem('role', user.role_name); // Lưu vai trò vào localStorage
             localStorage.setItem('roleId', user.role_id);
+            localStorage.setItem('userEmail', user.email);
+            localStorage.setItem('userId', user.id);
+            // userName sẽ được lấy từ profile API sau
             // Xác định đường dẫn chuyển hướng
             let path = '/member'; // Đường dẫn mặc định cho member
             if (user.role_name === 'Admin') {
@@ -140,6 +143,8 @@ export default function LoginPage() {
             localStorage.setItem('token', token);
             localStorage.setItem('role', user.role_name);
             localStorage.setItem('roleId', user.role_id);
+            localStorage.setItem('userEmail', user.email);
+            localStorage.setItem('userId', user.id);
             
             let path = '/member';
             if (user.role_name === 'Admin') {

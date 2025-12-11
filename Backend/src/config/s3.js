@@ -77,12 +77,28 @@ export function getS3Key(prefix, filename) {
 
 // Helper để tạo S3 URL
 export function getS3Url(key) {
-  if (!key) return null;
+  if (!key) {
+    console.log('[getS3Url] Key is null or empty');
+    return null;
+  }
+  
   // Nếu đã là full URL thì return luôn
   if (key.startsWith('http://') || key.startsWith('https://')) {
+    console.log('[getS3Url] Key is already a URL:', key);
     return key;
   }
-  return `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${key}`;
+  
+  // Đảm bảo key không có leading slash
+  const cleanKey = key.startsWith('/') ? key.substring(1) : key;
+  const url = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${cleanKey}`;
+  
+  console.log('[getS3Url] Generated URL:', {
+    originalKey: key,
+    cleanKey: cleanKey,
+    url: url,
+  });
+  
+  return url;
 }
 
 export { s3Client, S3_BUCKET_NAME, AWS_REGION };

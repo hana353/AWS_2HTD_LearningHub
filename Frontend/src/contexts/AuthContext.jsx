@@ -7,22 +7,29 @@ export const AuthProvider = ({ children }) => {
 
   // Hàm tải trạng thái người dùng từ localStorage
   const loadAuthState = useCallback(() => {
-    const token = localStorage.getItem("token");
-    const role = localStorage.getItem("role");
-    const userEmail = localStorage.getItem("userEmail");
-    const userName = localStorage.getItem("userName");
-    const userId = localStorage.getItem("userId");
+    try {
+      const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+      const role = localStorage.getItem("role");
+      const userEmail = localStorage.getItem("userEmail");
+      const userName = localStorage.getItem("userName");
+      const userId = localStorage.getItem("userId");
 
-    // Kiểm tra xem có đủ thông tin xác thực không
-    if (token && role && userEmail && userId) {
-      setIsAuthenticated(true);
-      setUser({
-        userId,
-        email: userEmail,
-        role,
-        userName,
-      });
-    } else {
+      // Kiểm tra xem có đủ thông tin xác thực không
+      // Chỉ cần token và role là đủ (userEmail và userId có thể không có)
+      if (token && role) {
+        setIsAuthenticated(true);
+        setUser({
+          userId: userId || null,
+          email: userEmail || '',
+          role,
+          userName: userName || '',
+        });
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error loading auth state:', error);
       setIsAuthenticated(false);
       setUser(null);
     }

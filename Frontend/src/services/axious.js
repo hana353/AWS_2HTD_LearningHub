@@ -18,7 +18,12 @@ apiClient.interceptors.request.use((config) => {
     config.headers = new AxiosHeaders(config.headers);
   }
 
-  const token = localStorage.getItem("access_token") || sessionStorage.getItem("access_token");
+  // Check cả access_token và token (vì login lưu là "token")
+  const token = 
+    localStorage.getItem("access_token") || 
+    sessionStorage.getItem("access_token") ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("token");
   if (token) {
     config.headers.set("Authorization", `Bearer ${token}`);
   }
@@ -33,7 +38,24 @@ apiClient.interceptors.response.use(
     const status = error.response?.status ?? 'ERR';
     const message = error.response?.data?.message || error.message || "Request failed";
 
-    // You can log the error here if needed
+    // Xử lý 401 Unauthorized - token hết hạn hoặc không hợp lệ
+    if (status === 401) {
+      // Xóa token và redirect về login
+      localStorage.removeItem("token");
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("roleId");
+      localStorage.removeItem("userEmail");
+      localStorage.removeItem("userName");
+      localStorage.removeItem("userId");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("access_token");
+      
+      // Chỉ redirect nếu đang ở client-side và không phải đang ở trang login
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/auth/login')) {
+        window.location.href = '/auth/login';
+      }
+    }
 
     return Promise.reject(new Error(`[${status}] ${message}`));
   }

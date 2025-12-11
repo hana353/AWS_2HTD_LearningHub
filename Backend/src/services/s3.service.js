@@ -130,11 +130,40 @@ export async function generatePresignedDownloadUrl(key, expiresIn = 3600) {
  */
 export function extractS3Key(urlOrKey) {
   if (!urlOrKey) return null;
-  if (urlOrKey.startsWith('http://') || urlOrKey.startsWith('https://')) {
+  
+  // Nếu đã là key (không có http/https), return luôn
+  if (!urlOrKey.startsWith('http://') && !urlOrKey.startsWith('https://')) {
+    return urlOrKey;
+  }
+  
+  try {
     // Extract key from URL
     const url = new URL(urlOrKey);
-    return url.pathname.substring(1); // Remove leading slash
+    let key = url.pathname.substring(1); // Remove leading slash
+    
+    // Remove query string nếu có (presigned URL có query params)
+    if (key.includes('?')) {
+      key = key.split('?')[0];
+    }
+    
+    // Decode URL encoding nếu có
+    key = decodeURIComponent(key);
+    
+    console.log('[extractS3Key] Extracted:', {
+      original: urlOrKey,
+      pathname: url.pathname,
+      extracted: key,
+    });
+    
+    return key;
+  } catch (err) {
+    console.error('[extractS3Key] Error parsing URL:', err);
+    // Fallback: try to extract manually
+    const match = urlOrKey.match(/\/[^?]+/);
+    if (match) {
+      return match[0].substring(1); // Remove leading slash
+    }
+    return urlOrKey;
   }
-  return urlOrKey;
 }
 

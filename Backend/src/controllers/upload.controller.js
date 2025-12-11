@@ -113,21 +113,18 @@ export const uploadAvatar = async (req, res) => {
       req.file.mimetype
     );
 
-    // Tạo presigned URL cho private bucket (thay vì public URL)
-    let presignedUrl = null;
-    try {
-      presignedUrl = await generatePresignedDownloadUrl(result.key, 3600); // 1 giờ
-    } catch (s3Error) {
-      console.error('Error generating presigned URL for avatar:', s3Error);
-      // Fallback về public URL nếu không tạo được presigned URL
-      presignedUrl = result.url;
-    }
+    // Vì bucket đang public, dùng public URL trực tiếp
+    // Không cần presigned URL
+    console.log('[uploadAvatar] Avatar uploaded:', {
+      s3Key: result.key,
+      url: result.url,
+    });
 
     return res.status(200).json({
       message: 'Avatar uploaded successfully',
       data: {
         s3Key: result.key,
-        url: presignedUrl || result.url, // Trả về presigned URL cho private bucket
+        url: result.url, // Public URL cho bucket public
         filename: req.file.originalname,
         contentType: req.file.mimetype,
         size: req.file.size,
