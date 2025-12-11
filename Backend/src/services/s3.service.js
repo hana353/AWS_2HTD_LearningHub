@@ -38,6 +38,7 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
   
   if (normalizedContentType.startsWith('video/')) {
     // Video cần Cache-Control và Content-Disposition để browser có thể stream
+    // S3 tự động hỗ trợ Accept-Ranges: bytes cho video streaming
     cacheControl = 'public, max-age=31536000, immutable'; // Cache 1 năm
     contentDisposition = 'inline'; // Cho phép play trực tiếp trong browser
   } else if (normalizedContentType.startsWith('image/')) {

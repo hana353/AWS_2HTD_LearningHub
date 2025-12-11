@@ -59,7 +59,12 @@ export default function MemberLectureView() {
           } else {
             // Tạo public URL từ s3Key (giống getS3Url trong backend)
             const cleanKey = s3Key.startsWith('/') ? s3Key.substring(1) : s3Key;
-            finalVideoUrl = `https://learninghub-app-bucket.s3.ap-southeast-1.amazonaws.com/${cleanKey}`;
+            // Encode từng segment của key để đảm bảo URL hợp lệ
+            const encodedKey = cleanKey
+              .split('/')
+              .map(segment => encodeURIComponent(segment))
+              .join('/');
+            finalVideoUrl = `https://learninghub-app-bucket.s3.ap-southeast-1.amazonaws.com/${encodedKey}`;
             console.log("Fallback: Generated video URL from s3Key:", finalVideoUrl);
           }
         } else {
@@ -83,7 +88,7 @@ export default function MemberLectureView() {
         if (finalVideoUrl) {
           try {
             const url = new URL(finalVideoUrl);
-            // Pathname đã được encode tự động bởi URL constructor
+            // Đảm bảo pathname được encode đúng (URL constructor tự encode, nhưng cần kiểm tra)
             // Chỉ cần đảm bảo không có query string
             finalVideoUrl = `${url.protocol}//${url.host}${url.pathname}`;
             console.log("Final video URL:", finalVideoUrl);
@@ -93,6 +98,29 @@ export default function MemberLectureView() {
               pathname: url.pathname,
               fullUrl: finalVideoUrl,
             });
+            
+            // Test URL accessibility với HEAD request (không block UI)
+            fetch(finalVideoUrl, { 
+              method: 'HEAD',
+              mode: 'cors',
+            })
+              .then(response => {
+                console.log("Video URL accessibility test:", {
+                  status: response.status,
+                  headers: {
+                    'content-type': response.headers.get('content-type'),
+                    'content-length': response.headers.get('content-length'),
+                    'accept-ranges': response.headers.get('accept-ranges'),
+                  },
+                });
+                if (!response.ok) {
+                  console.warn("Video URL returned non-OK status:", response.status);
+                }
+              })
+              .catch(err => {
+                console.warn("Video URL accessibility test failed (may be CORS issue):", err);
+                // Không throw error vì có thể là CORS preflight issue, video vẫn có thể play
+              });
           } catch (err) {
             console.error("Error parsing final URL:", err);
             console.log("Using original URL:", finalVideoUrl);
@@ -243,9 +271,12 @@ export default function MemberLectureView() {
                           errorMsg += "Video bị hủy.";
                           break;
                         case error.MEDIA_ERR_NETWORK:
-                          errorMsg += "Lỗi mạng. Vui lòng kiểm tra kết nối.";
-                          // Có thể là CORS issue
-                          console.warn("Network error - có thể do CORS. Kiểm tra S3 CORS configuration.");
+                          errorMsg += "Lỗi mạng hoặc CORS. Vui lòng kiểm tra kết nối và cấu hình S3 CORS.";
+                          // Có thể là CORS issue - cần HEAD method và Accept-Ranges header
+                          console.warn("Network error - có thể do CORS. Kiểm tra S3 CORS configuration:");
+                          console.warn("  - CORS phải có HEAD method");
+                          console.warn("  - CORS phải expose Accept-Ranges và Content-Range headers");
+                          console.warn("  - Video URL:", currentSrc);
                           break;
                         case error.MEDIA_ERR_DECODE:
                           errorMsg += "Lỗi giải mã video.";

@@ -71,7 +71,11 @@ const s3Client = new S3Client(s3ClientConfig);
 // Helper để tạo S3 key (path) cho file
 export function getS3Key(prefix, filename) {
   const timestamp = Date.now();
-  const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+  // Sanitize filename: giữ lại ký tự an toàn, encode các ký tự đặc biệt
+  // Giữ lại: a-z, A-Z, 0-9, ., -, _, và khoảng trắng (sẽ được encode)
+  const sanitizedFilename = filename
+    .replace(/[^a-zA-Z0-9.\-_ ]/g, '_') // Thay ký tự không hợp lệ bằng _
+    .replace(/\s+/g, '_'); // Thay khoảng trắng bằng _
   return `${prefix}/${timestamp}-${sanitizedFilename}`;
 }
 
@@ -114,11 +118,19 @@ export function getS3Url(key) {
   let cleanKey = key.split('?')[0]; // Remove query string
   cleanKey = cleanKey.startsWith('/') ? cleanKey.substring(1) : cleanKey;
   
-  const url = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${cleanKey}`;
+  // Encode từng phần của key để đảm bảo URL hợp lệ
+  // S3 key có thể chứa ký tự đặc biệt, cần encode đúng cách
+  const encodedKey = cleanKey
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+  
+  const url = `https://${S3_BUCKET_NAME}.s3.${AWS_REGION}.amazonaws.com/${encodedKey}`;
   
   console.log('[getS3Url] Generated URL:', {
     originalKey: key.substring(0, 100) + (key.length > 100 ? '...' : ''),
     cleanKey: cleanKey,
+    encodedKey: encodedKey,
     url: url,
   });
   
