@@ -20,16 +20,66 @@ import { s3Client, S3_BUCKET_NAME, getS3Key, getS3Url } from '../config/s3.js';
 export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) {
   const key = getS3Key(prefix, filename);
 
-  const command = new PutObjectCommand({
+  // Normalize Content-Type: đảm bảo đúng format
+  let normalizedContentType = contentType || 'application/octet-stream';
+  
+  // Fix common MIME type issues
+  if (normalizedContentType === 'video/quicktime') {
+    normalizedContentType = 'video/mp4'; // QuickTime thường là MP4
+  }
+  if (normalizedContentType === 'video/x-msvideo') {
+    normalizedContentType = 'video/avi';
+  }
+
+  // Metadata cho video streaming
+  // Trong AWS SDK v3, CacheControl và ContentDisposition là properties trực tiếp
+  let cacheControl = undefined;
+  let contentDisposition = undefined;
+  
+  if (normalizedContentType.startsWith('video/')) {
+    // Video cần Cache-Control và Content-Disposition để browser có thể stream
+    cacheControl = 'public, max-age=31536000, immutable'; // Cache 1 năm
+    contentDisposition = 'inline'; // Cho phép play trực tiếp trong browser
+  } else if (normalizedContentType.startsWith('image/')) {
+    cacheControl = 'public, max-age=31536000, immutable';
+  } else if (normalizedContentType === 'application/pdf') {
+    cacheControl = 'public, max-age=86400'; // Cache 1 ngày cho PDF
+    contentDisposition = 'inline';
+  }
+
+  const commandParams = {
     Bucket: S3_BUCKET_NAME,
     Key: key,
     Body: fileBuffer,
-    ContentType: contentType,
-    // Không dùng ACL vì bucket đang ở chế độ "Bucket owner enforced"
-    // File sẽ public nhờ Bucket Policy đã cấu hình
+    ContentType: normalizedContentType,
+  };
+
+  // Chỉ thêm metadata nếu có
+  if (cacheControl) {
+    commandParams.CacheControl = cacheControl;
+  }
+  if (contentDisposition) {
+    commandParams.ContentDisposition = contentDisposition;
+  }
+
+  console.log('[uploadFileToS3] Uploading file:', {
+    key,
+    prefix,
+    filename,
+    contentType: normalizedContentType,
+    size: fileBuffer.length,
+    cacheControl,
+    contentDisposition,
   });
 
+  const command = new PutObjectCommand(commandParams);
+
   await s3Client.send(command);
+
+  console.log('[uploadFileToS3] File uploaded successfully:', {
+    key,
+    url: getS3Url(key),
+  });
 
   return {
     key,

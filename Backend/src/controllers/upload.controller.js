@@ -21,6 +21,9 @@ const fileFilter = (req, file, cb) => {
     'video/mpeg',
     'video/quicktime',
     'video/x-msvideo',
+    'video/x-matroska', // MKV
+    'video/webm',
+    'video/avi',
     'application/pdf',
     'audio/mpeg',
     'audio/mp3',
@@ -28,10 +31,22 @@ const fileFilter = (req, file, cb) => {
     'audio/ogg',
   ];
 
-  if (allowedMimes.includes(file.mimetype)) {
+  // Nếu mimetype không có trong list nhưng bắt đầu bằng video/ hoặc image/, cho phép
+  // (một số browser có thể gửi mimetype khác)
+  if (allowedMimes.includes(file.mimetype) || 
+      file.mimetype.startsWith('video/') || 
+      file.mimetype.startsWith('image/')) {
+    console.log('[fileFilter] Allowing file:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    });
     cb(null, true);
   } else {
-    cb(new Error('File type not allowed'), false);
+    console.warn('[fileFilter] File type not allowed:', {
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    });
+    cb(new Error(`File type not allowed: ${file.mimetype}`), false);
   }
 };
 
@@ -84,6 +99,19 @@ export const uploadLectureFile = async (req, res) => {
       return res.status(400).json({ message: 'courseId is required' });
     }
 
+    // Log file info để debug
+    console.log('[uploadLectureFile] File info:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      courseId,
+    });
+
+    // Validate mimetype cho video
+    if (req.file.mimetype.startsWith('video/')) {
+      console.log('[uploadLectureFile] Uploading video file');
+    }
+
     const prefix = `lectures/${courseId}`;
     const result = await uploadFileToS3(
       req.file.buffer,
@@ -91,6 +119,11 @@ export const uploadLectureFile = async (req, res) => {
       req.file.originalname,
       req.file.mimetype
     );
+
+    console.log('[uploadLectureFile] Upload successful:', {
+      s3Key: result.key,
+      url: result.url,
+    });
 
     return res.status(200).json({
       message: 'File uploaded successfully',
