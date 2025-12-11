@@ -9,6 +9,7 @@ import {
   updateEmailVerified,
   updateUserPasswordHash,
 } from "../models/user.model.js";
+import { sql, pool, poolConnect } from "../config/db.js";
 
 import { cognitoClient, COGNITO_CLIENT_ID } from "../config/cognito.js";
 
@@ -183,12 +184,21 @@ export async function login({ email, password }) {
     throw e;
   }
 
-  // Decode IdToken để lấy email_verified
+  // Decode IdToken để lấy thông tin user
   let emailVerified = false;
+  let cognitoSub = null;
+  let cognitoEmail = null;
+  let cognitoPhone = null;
+  let cognitoFullName = null;
+  
   try {
     const [, payload] = authResult.IdToken.split(".");
     const decoded = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
     emailVerified = !!decoded.email_verified;
+    cognitoSub = decoded.sub || null;
+    cognitoEmail = decoded.email || email;
+    cognitoPhone = decoded.phone_number || null;
+    cognitoFullName = decoded.family_name || decoded.name || null;
   } catch (err) {
     console.error("Decode IdToken error:", err);
   }
@@ -196,10 +206,59 @@ export async function login({ email, password }) {
   // Lấy user trong DB
   let user = await findUserByEmail(email);
 
+  // Nếu không tìm thấy user trong DB nhưng đã đăng nhập thành công với Cognito
+  // → Tự động tạo user trong local DB (auto-sync)
   if (!user) {
-    const e = new Error("User not found in local database");
-    e.statusCode = 404;
-    throw e;
+    console.log(`[Auto-sync] User ${email} exists in Cognito but not in local DB. Creating user...`);
+    
+    try {
+      // Tạo user mới với thông tin từ Cognito
+      // Không có password hash vì password được quản lý bởi Cognito
+      const newUser = await createUserWithProfile({
+        email: cognitoEmail || email,
+        passwordHash: null, // Password được quản lý bởi Cognito
+        phone: cognitoPhone || null,
+        fullName: cognitoFullName || null,
+        cognitoSub: cognitoSub,
+        roleId: 2, // Default: Member role
+      });
+      
+      user = await findUserByEmail(email);
+      console.log(`[Auto-sync] Successfully created user in local DB: ${email}`);
+    } catch (syncErr) {
+      console.error("[Auto-sync] Failed to create user in local DB:", syncErr);
+      const e = new Error(
+        "User authenticated with Cognito but failed to sync with local database. Please contact support."
+      );
+      e.statusCode = 500;
+      e.originalError = syncErr.message;
+      throw e;
+    }
+  } else {
+    // User đã tồn tại: Kiểm tra và sync cognito_sub nếu chưa có
+    if (cognitoSub && !user.cognito_sub) {
+      console.log(`[Auto-sync] Updating cognito_sub for existing user: ${email}`);
+      try {
+        await poolConnect;
+        const request = pool.request();
+        request.input('id', sql.UniqueIdentifier, user.id);
+        request.input('cognito_sub', sql.NVarChar(255), cognitoSub);
+        
+        await request.query(`
+          UPDATE users
+          SET cognito_sub = @cognito_sub,
+              updated_at = SYSDATETIMEOFFSET()
+          WHERE id = @id;
+        `);
+        
+        // Reload user để có cognito_sub mới
+        user = await findUserByEmail(email);
+        console.log(`[Auto-sync] Successfully updated cognito_sub for user: ${email}`);
+      } catch (updateErr) {
+        console.error("[Auto-sync] Failed to update cognito_sub:", updateErr);
+        // Không throw error, chỉ log vì user vẫn có thể đăng nhập
+      }
+    }
   }
 
   if (!user.is_active) {
