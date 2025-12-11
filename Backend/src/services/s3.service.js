@@ -18,18 +18,25 @@ import { s3Client, S3_BUCKET_NAME, getS3Key, getS3Url } from '../config/s3.js';
  * @returns {Promise<{key: string, url: string}>}
  */
 export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) {
+  // Validate buffer
+  if (!fileBuffer || !Buffer.isBuffer(fileBuffer)) {
+    throw new Error('Invalid file buffer: buffer is required and must be a Buffer');
+  }
+  
+  if (fileBuffer.length === 0) {
+    throw new Error('Invalid file buffer: buffer is empty');
+  }
+
   const key = getS3Key(prefix, filename);
 
   // Normalize Content-Type: đảm bảo đúng format
+  // QUAN TRỌNG: KHÔNG thay đổi ContentType tùy tiện vì có thể làm file không mở được
+  // Giữ nguyên ContentType từ client để đảm bảo file được lưu đúng định dạng
   let normalizedContentType = contentType || 'application/octet-stream';
   
-  // Fix common MIME type issues
-  if (normalizedContentType === 'video/quicktime') {
-    normalizedContentType = 'video/mp4'; // QuickTime thường là MP4
-  }
-  if (normalizedContentType === 'video/x-msvideo') {
-    normalizedContentType = 'video/avi';
-  }
+  // Chỉ normalize các trường hợp thực sự cần thiết, không thay đổi định dạng file
+  // Video/quicktime và video/x-msvideo là các định dạng hợp lệ, không nên thay đổi
+  // Nếu cần, có thể thêm vào whitelist nhưng không thay đổi thành format khác
 
   // Metadata cho video streaming
   // Trong AWS SDK v3, CacheControl và ContentDisposition là properties trực tiếp
@@ -48,11 +55,17 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
     contentDisposition = 'inline';
   }
 
+  // Đảm bảo buffer không bị modify - tạo copy nếu cần
+  // Trong Node.js, Buffer được pass by reference nhưng AWS SDK sẽ tự copy
+  // Tuy nhiên, để an toàn, đảm bảo không modify buffer gốc
+  
   const commandParams = {
     Bucket: S3_BUCKET_NAME,
     Key: key,
-    Body: fileBuffer,
+    Body: fileBuffer, // AWS SDK sẽ tự xử lý buffer đúng cách
     ContentType: normalizedContentType,
+    // Đảm bảo binary data được xử lý đúng
+    // S3 tự động xử lý binary data, không cần set ContentEncoding
   };
 
   // Chỉ thêm metadata nếu có
@@ -63,14 +76,25 @@ export async function uploadFileToS3(fileBuffer, prefix, filename, contentType) 
     commandParams.ContentDisposition = contentDisposition;
   }
 
+  // Validate buffer integrity - kiểm tra checksum đơn giản
+  const bufferSize = fileBuffer.length;
+  const firstBytes = fileBuffer.slice(0, Math.min(16, bufferSize));
+  const lastBytes = fileBuffer.slice(Math.max(0, bufferSize - 16), bufferSize);
+  
   console.log('[uploadFileToS3] Uploading file:', {
     key,
     prefix,
     filename,
     contentType: normalizedContentType,
-    size: fileBuffer.length,
+    size: bufferSize,
     cacheControl,
     contentDisposition,
+    bufferInfo: {
+      isBuffer: Buffer.isBuffer(fileBuffer),
+      length: bufferSize,
+      firstBytes: firstBytes.toString('hex').substring(0, 32),
+      lastBytes: lastBytes.toString('hex').substring(0, 32),
+    },
   });
 
   const command = new PutObjectCommand(commandParams);

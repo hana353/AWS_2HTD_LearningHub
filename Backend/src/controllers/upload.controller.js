@@ -99,13 +99,35 @@ export const uploadLectureFile = async (req, res) => {
       return res.status(400).json({ message: 'courseId is required' });
     }
 
+    // Validate file buffer
+    if (!req.file.buffer || !Buffer.isBuffer(req.file.buffer)) {
+      console.error('[uploadLectureFile] Invalid file buffer');
+      return res.status(400).json({ message: 'Invalid file: buffer is corrupted' });
+    }
+    
+    if (req.file.buffer.length === 0) {
+      console.error('[uploadLectureFile] Empty file buffer');
+      return res.status(400).json({ message: 'Invalid file: file is empty' });
+    }
+    
     // Log file info để debug
     console.log('[uploadLectureFile] File info:', {
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
       size: req.file.size,
+      bufferSize: req.file.buffer.length,
+      bufferType: Buffer.isBuffer(req.file.buffer) ? 'Buffer' : typeof req.file.buffer,
       courseId,
     });
+    
+    // Đảm bảo size khớp nhau
+    if (req.file.size !== req.file.buffer.length) {
+      console.warn('[uploadLectureFile] Size mismatch:', {
+        declaredSize: req.file.size,
+        bufferSize: req.file.buffer.length,
+      });
+      // Không fail vì có thể do encoding, nhưng log để debug
+    }
 
     // Validate mimetype cho video
     if (req.file.mimetype.startsWith('video/')) {
@@ -157,6 +179,17 @@ export const uploadAvatar = async (req, res) => {
     // Chỉ cho phép image
     if (!req.file.mimetype.startsWith('image/')) {
       return res.status(400).json({ message: 'Only image files are allowed' });
+    }
+
+    // Validate file buffer
+    if (!req.file.buffer || !Buffer.isBuffer(req.file.buffer)) {
+      console.error('[uploadAvatar] Invalid file buffer');
+      return res.status(400).json({ message: 'Invalid file: buffer is corrupted' });
+    }
+    
+    if (req.file.buffer.length === 0) {
+      console.error('[uploadAvatar] Empty file buffer');
+      return res.status(400).json({ message: 'Invalid file: file is empty' });
     }
 
     const prefix = 'avatars';
@@ -214,6 +247,17 @@ export const uploadFlashcardFile = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file provided' });
+    }
+
+    // Validate file buffer
+    if (!req.file.buffer || !Buffer.isBuffer(req.file.buffer)) {
+      console.error('[uploadFlashcardFile] Invalid file buffer');
+      return res.status(400).json({ message: 'Invalid file: buffer is corrupted' });
+    }
+    
+    if (req.file.buffer.length === 0) {
+      console.error('[uploadFlashcardFile] Empty file buffer');
+      return res.status(400).json({ message: 'Invalid file: file is empty' });
     }
 
     const { setId } = req.body;
@@ -285,6 +329,17 @@ export const uploadImage = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'No file provided' });
+    }
+
+    // Validate file buffer
+    if (!req.file.buffer || !Buffer.isBuffer(req.file.buffer)) {
+      console.error('[uploadImage] Invalid file buffer');
+      return res.status(400).json({ message: 'Invalid file: buffer is corrupted' });
+    }
+    
+    if (req.file.buffer.length === 0) {
+      console.error('[uploadImage] Empty file buffer');
+      return res.status(400).json({ message: 'Invalid file: file is empty' });
     }
 
     // Chỉ cho phép image
