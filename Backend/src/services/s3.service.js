@@ -233,22 +233,16 @@ export async function generatePresignedUploadUrl(
   contentType,
   expiresIn = 3600
 ) {
+  // QUAN TRỌNG: Chỉ set ContentType trong presigned URL
+  // Metadata (CacheControl, ContentDisposition) sẽ được set sau khi upload hoặc
+  // không cần thiết vì bucket đang public và có thể config metadata ở bucket level
+  // Việc set metadata trong presigned URL yêu cầu headers phải match chính xác,
+  // dễ gây lỗi 403 nếu không set đúng
   const commandParams = {
     Bucket: S3_BUCKET_NAME,
     Key: key,
     ContentType: contentType,
   };
-
-  // Thêm metadata cho video streaming (giống như uploadFileToS3)
-  if (contentType.startsWith('video/')) {
-    commandParams.CacheControl = 'public, max-age=31536000, immutable';
-    commandParams.ContentDisposition = 'inline';
-  } else if (contentType.startsWith('image/')) {
-    commandParams.CacheControl = 'public, max-age=31536000, immutable';
-  } else if (contentType === 'application/pdf') {
-    commandParams.CacheControl = 'public, max-age=86400';
-    commandParams.ContentDisposition = 'inline';
-  }
 
   const command = new PutObjectCommand(commandParams);
   const url = await getSignedUrl(s3Client, command, { expiresIn });

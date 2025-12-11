@@ -55,14 +55,13 @@ export async function uploadLectureFile(file, courseId) {
     // QUAN TRỌNG: 
     // - Dùng PUT method
     // - Body là File object trực tiếp (không transform)
-    // - Chỉ set Content-Type header (metadata như CacheControl, ContentDisposition đã được encode trong presigned URL signature)
+    // - Chỉ set Content-Type header (phải khớp với ContentType trong presigned URL)
+    const contentType = file.type || 'application/octet-stream';
     const uploadRes = await fetch(presignedUrl, {
       method: 'PUT',
       body: file, // File object trực tiếp, không modify
       headers: {
-        'Content-Type': file.type || 'application/octet-stream',
-        // Metadata (CacheControl, ContentDisposition) đã được encode vào presigned URL signature
-        // S3 sẽ tự động apply metadata khi file được upload thành công
+        'Content-Type': contentType,
       },
     });
 

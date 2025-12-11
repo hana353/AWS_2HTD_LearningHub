@@ -376,18 +376,6 @@ export const getPresignedUploadUrl = async (req, res) => {
     // Get public URL
     const publicUrl = getS3Url(s3Key);
 
-    // Xác định metadata cần set cho file (nếu có)
-    const metadata = {};
-    if (contentType.startsWith('video/')) {
-      metadata.CacheControl = 'public, max-age=31536000, immutable';
-      metadata.ContentDisposition = 'inline';
-    } else if (contentType.startsWith('image/')) {
-      metadata.CacheControl = 'public, max-age=31536000, immutable';
-    } else if (contentType === 'application/pdf') {
-      metadata.CacheControl = 'public, max-age=86400';
-      metadata.ContentDisposition = 'inline';
-    }
-
     return res.status(200).json({
       message: 'Presigned URL generated successfully',
       data: {
@@ -395,7 +383,6 @@ export const getPresignedUploadUrl = async (req, res) => {
         presignedUrl,
         publicUrl,
         expiresIn,
-        metadata, // Trả về metadata để frontend set headers khi upload
       },
     });
   } catch (err) {
