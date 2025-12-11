@@ -125,12 +125,21 @@ export default function TeacherClasses() {
     };
   }, [openMenuId]);
 
+  // Tính orderIndex mặc định dựa trên max orderIndex hiện tại (không phải dựa vào length)
+  const getNextOrderIndex = () => {
+    if (lectures && lectures.length > 0) {
+      const maxOrderIndex = Math.max(...lectures.map(l => l.orderIndex || 0));
+      return maxOrderIndex + 1;
+    }
+    return 1;
+  };
+
   const getInitialValues = (lecture = null) => ({
     title: lecture?.title || '',
     contentType: lecture?.contentType || 'video',
     s3Key: lecture?.s3Key || '',
     durationSeconds: lecture?.durationSeconds || 600,
-    orderIndex: lecture?.orderIndex || (lectures?.length || 0) + 1,
+    orderIndex: lecture?.orderIndex || getNextOrderIndex(),
     published: lecture?.published ?? true
   });
 
@@ -605,13 +614,8 @@ export default function TeacherClasses() {
               !lecturesError &&
               lectures.length > 0 && (
                 <div className="space-y-3">
-                  {lectures
-                    .slice()
-                    .sort(
-                      (a, b) =>
-                        (a.orderIndex || 0) - (b.orderIndex || 0)
-                    )
-                    .map((lecture, index) => {
+                  {/* Backend đã ORDER BY order_index ASC, created_at ASC, không cần sort lại */}
+                  {lectures.map((lecture, index) => {
                       // Dùng index làm unique key cho UI để tránh conflict
                       const uniqueKey = `lecture-${index}-${lecture.id || lecture.lectureId || lecture.lecture_id || lecture.title || 'unknown'}`;
                       const isMenuOpen = openMenuId === uniqueKey;
