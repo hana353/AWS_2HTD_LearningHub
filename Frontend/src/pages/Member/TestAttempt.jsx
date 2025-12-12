@@ -53,21 +53,30 @@ export default function TestAttempt() {
 
   // countdown timer
   useEffect(() => {
-    if (secondsLeft == null) return;
+  if (secondsLeft == null) return;
+
+  // Ngừng đếm khi đã nộp bài
+  if (submitted) {
     if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setSecondsLeft(s => {
-        if (s === null) return s;
-        if (s <= 1) {
-          clearInterval(timerRef.current);
-          // time's up - auto submit or disable
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timerRef.current);
-  }, [secondsLeft]);
+    return;
+  }
+
+  if (timerRef.current) clearInterval(timerRef.current);
+
+  timerRef.current = setInterval(() => {
+    setSecondsLeft(s => {
+      if (s === null) return s;
+      if (s <= 1) {
+        clearInterval(timerRef.current);
+        return 0;
+      }
+      return s - 1;
+    });
+  }, 1000);
+
+  return () => clearInterval(timerRef.current);
+}, [secondsLeft, submitted]);
+
 
   function formatTime(sec) {
     if (sec == null) return '--:--';

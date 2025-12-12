@@ -37,7 +37,7 @@ export default function TestReview() {
   return (
     <div className="p-6">
       <div className="flex items-center gap-4 mb-6">
-        <button onClick={() => navigate(-1)} className="px-3 py-2 rounded-lg border flex items-center gap-2">
+        <button onClick={() => navigate('/member/test')} className="px-3 py-2 rounded-lg border flex items-center gap-2">
           <ArrowLeft size={16} /> Quay lại
         </button>
         <h1 className="text-2xl font-bold">Xem kết quả chi tiết</h1>
