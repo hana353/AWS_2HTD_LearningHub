@@ -60,17 +60,18 @@ export async function login(req, res, next) {
   }
 }
 
-// Xác thực email bằng mã code (sau khi user nhận email từ Cognito):
+// Xác thực email (bản local, KHÔNG dùng mã code):
 export async function confirmEmail(req, res, next) {
   try {
-    const { email, code } = req.body;
-    if (!email || !code) {
-      return errorResponse(res, "email và code là bắt buộc", 400, [
-        "email and code are required",
+    const { email } = req.body;
+    if (!email) {
+      return errorResponse(res, "email là bắt buộc", 400, [
+        "email is required",
       ]);
     }
 
-    await authService.confirmEmail({ email, code });
+    // Bỏ xác thực bằng code, chỉ cần email là set email_verified = true
+    await authService.confirmEmail({ email });
     return successResponse(res, null, "Email verified successfully", 200);
   } catch (err) {
     if (err.statusCode) {
@@ -183,21 +184,19 @@ export async function forgotPassword(req, res, next) {
   }
 }
 
-// Xác nhận quên mật khẩu (code + mật khẩu mới)
+// Đặt lại mật khẩu: nhận token (từ link email) + newPassword, hoặc email + newPassword
 export async function resetPassword(req, res, next) {
   try {
-    const { email, code, newPassword } = req.body;
+    const { email, code, newPassword, token } = req.body;
 
-    const errors = [];
-    if (!email) errors.push("email is required");
-    if (!code) errors.push("code is required");
-    if (!newPassword) errors.push("newPassword is required");
-
-    if (errors.length > 0) {
-      return errorResponse(res, "Validation error", 400, errors);
+    if (!newPassword) {
+      return errorResponse(res, "newPassword is required", 400);
+    }
+    if (!token && !email) {
+      return errorResponse(res, "token hoặc email là bắt buộc", 400);
     }
 
-    await authService.resetPassword({ email, code, newPassword });
+    await authService.resetPassword({ email, code, newPassword, token });
     return successResponse(res, null, "Password reset successfully", 200);
   } catch (err) {
     if (err.statusCode) {
